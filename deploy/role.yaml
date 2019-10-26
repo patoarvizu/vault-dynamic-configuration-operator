@@ -1,0 +1,48 @@
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: vault-dynamic-configuration-operator
+  namespace: vault
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - create
+  - delete
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - list
+  - get
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - create
+- apiGroups:
+  - apps
+  resources:
+  - deployments/finalizers
+  resourceNames:
+  - vault-dynamic-configuration-operator
+  verbs:
+  - update
+- apiGroups:
+  - vault.banzaicloud.com
+  resources:
+  - vaults
+  verbs:
+  - get
+  - list
+  - watch
+  - update
