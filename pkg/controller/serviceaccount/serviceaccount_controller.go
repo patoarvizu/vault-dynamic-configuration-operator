@@ -1,10 +1,10 @@
 package serviceaccount
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"reflect"
+	"text/template"
 
 	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const policyTemplate = "path \"secret/%s\" { capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"] }"
+const defaultPolicyTemplate = "path \"secret/{{ .ObjectMeta.Name }}\" { capabilities = [\"read\"] }"
 
 var log = logf.Log.WithName("controller_serviceaccount")
 
@@ -151,12 +151,24 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		if err != nil {
 			reqLogger.Error(err, "Error unmarshaling config")
 		} else {
-			reqLogger.Info("Bank Vaults config", "Type:", reflect.TypeOf(bvConfig), "Config:", bvConfig)
-			reqLogger.Info("Bank Vaults roles", "Roles", bvConfig.Auth[0].Roles)
 			if !roleExists(bvConfig.Auth[0].Roles, instance.ObjectMeta.Name+"-role") {
+				configMap := &corev1.ConfigMap{}
+				err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
+				if err != nil {
+					reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
+				}
+				var policyTemplate string
+				if _, ok := configMap.Data["policy-template"]; !ok {
+					policyTemplate = defaultPolicyTemplate
+				} else {
+					policyTemplate = configMap.Data["policy-template"]
+				}
+				t := template.Must(template.New("policy").Parse(policyTemplate))
+				var parsedBuffer bytes.Buffer
+				t.Execute(&parsedBuffer, instance)
 				newPolicy := &policy{
 					Name:  instance.ObjectMeta.Name + "-policy",
-					Rules: fmt.Sprintf(policyTemplate, instance.ObjectMeta.Name),
+					Rules: parsedBuffer.String(),
 				}
 				bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
 				newRole := &role{
@@ -167,9 +179,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 				}
 				bvConfig.Auth[0].Roles = append(bvConfig.Auth[0].Roles, *newRole)
 				configJsonData, _ := json.Marshal(bvConfig)
-				reqLogger.Info("Config JSON Data", "JSON", configJsonData)
 				err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
-				reqLogger.Info("Updated external config", "Updated config", vaultConfig.Spec.ExternalConfig)
 				if err != nil {
 					reqLogger.Error(err, "Error unmarshaling updated config")
 				} else {
@@ -177,30 +187,8 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 				}
 			}
 		}
-		// auth, _ := vaultConfig.Spec.ExternalConfig["auth"].([]interface{})
-		// roles, _ := vaultConfig.Spec.ExternalConfig["auth"].([]interface{})[0].(map[string]interface{})["roles"]
-		// reqLogger.Info("Vault config", "Type:", reflect.TypeOf(auth), "Config:", auth)
-		// reqLogger.Info("Roles config", "Type:", reflect.TypeOf(roles), "Config:", roles)
 	}
 
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
-	} else if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
 	return reconcile.Result{}, nil
 }
 

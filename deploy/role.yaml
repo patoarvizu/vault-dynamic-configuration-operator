@@ -29,6 +29,7 @@ rules:
   verbs:
   - get
   - create
+  - list
 - apiGroups:
   - apps
   resources:

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-dynamic-configuration
+  namespace: vault
+data:
+  policy-template: |
+    path "secret/{{ .ObjectMeta.Name }}" {
+      capabilities = ["create", "read", "update", "delete", "list"]
+    }
