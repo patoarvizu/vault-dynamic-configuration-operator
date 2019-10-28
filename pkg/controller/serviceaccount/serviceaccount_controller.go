@@ -149,8 +149,8 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 
-	if _, ok := instance.Annotations["vault.patoarvizu.dev/auto-configure"]; !ok {
-		reqLogger.Info("Service account not annotated", "ServiceAccount", instance.ObjectMeta.Name)
+	if val, ok := instance.Annotations["vault.patoarvizu.dev/auto-configure"]; !ok || val != "true" {
+		reqLogger.Info("Service account not annotated or auto-configure set to 'false'", "ServiceAccount", instance.ObjectMeta.Name)
 		return reconcile.Result{}, nil
 	}
 
