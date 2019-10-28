@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -22,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const defaultPolicyTemplate = "path \"secret/{{ .ObjectMeta.Name }}\" { capabilities = [\"read\"] }"
+const defaultPolicyTemplate = "path \"secret/{{ .Name }}\" { capabilities = [\"read\"] }"
 
 var log = logf.Log.WithName("controller_serviceaccount")
 
@@ -56,15 +55,33 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner ServiceAccount
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &corev1.ServiceAccount{},
-	})
-	if err != nil {
-		return err
-	}
+	err = c.Watch(&source.Kind{
+		Type: &corev1.ConfigMap{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(h handler.MapObject) []reconcile.Request {
+				namespaces := &corev1.NamespaceList{}
+				mgr.GetClient().List(context.TODO(), namespaces)
+				requests := []reconcile.Request{}
+				for _, ns := range namespaces.Items {
+					serviceAccounts := &corev1.ServiceAccountList{}
+					mgr.GetClient().List(context.TODO(), serviceAccounts, client.InNamespace(ns.ObjectMeta.Name))
+					for _, sa := range serviceAccounts.Items {
+						if val, ok := sa.ObjectMeta.Annotations["vault.patoarvizu.dev/auto-configure"]; ok {
+							if val == "true" {
+								requests = append(requests, reconcile.Request{
+									NamespacedName: types.NamespacedName{
+										Name:      sa.ObjectMeta.Name,
+										Namespace: sa.ObjectMeta.Namespace,
+									},
+								})
+							}
+						}
+					}
+				}
+				return requests
+			}),
+		},
+	)
 
 	return nil
 }
@@ -102,6 +119,11 @@ type role struct {
 	Policies                      []string `json:"policies"`
 }
 
+type policyTemplateInput struct {
+	Name      string
+	Namespace string
+}
+
 // Reconcile reads that state of the cluster for a ServiceAccount object and makes changes based on the state read
 // and what is in the ServiceAccount.Spec
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
@@ -132,14 +154,6 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, nil
 	}
 
-	// Define a new Pod object
-	pod := newPodForCR(instance)
-
-	// Set ServiceAccount instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	vaultConfig := &bankvaultsv1alpha1.Vault{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault", Namespace: "vault"}, vaultConfig)
 	if err != nil {
@@ -151,7 +165,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		if err != nil {
 			reqLogger.Error(err, "Error unmarshaling config")
 		} else {
-			if !roleExists(bvConfig.Auth[0].Roles, instance.ObjectMeta.Name+"-role") {
+			if !roleExists(bvConfig.Auth[0].Roles, instance.ObjectMeta.Name) {
 				configMap := &corev1.ConfigMap{}
 				err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
 				if err != nil {
@@ -165,19 +179,50 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 				}
 				t := template.Must(template.New("policy").Parse(policyTemplate))
 				var parsedBuffer bytes.Buffer
-				t.Execute(&parsedBuffer, instance)
+				t.Execute(&parsedBuffer, policyTemplateInput{
+					Name:      instance.ObjectMeta.Name,
+					Namespace: instance.ObjectMeta.Namespace,
+				})
 				newPolicy := &policy{
-					Name:  instance.ObjectMeta.Name + "-policy",
+					Name:  instance.ObjectMeta.Name,
 					Rules: parsedBuffer.String(),
 				}
 				bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
 				newRole := &role{
 					BoundServiceAccountNames:      instance.ObjectMeta.Name,
 					BoundServiceAccountNamespaces: instance.ObjectMeta.Namespace,
-					Name:                          instance.ObjectMeta.Name + "-role",
-					Policies:                      []string{instance.ObjectMeta.Name + "-policy"},
+					Name:                          instance.ObjectMeta.Name,
+					Policies:                      []string{instance.ObjectMeta.Name},
 				}
 				bvConfig.Auth[0].Roles = append(bvConfig.Auth[0].Roles, *newRole)
+				configJsonData, _ := json.Marshal(bvConfig)
+				err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
+				if err != nil {
+					reqLogger.Error(err, "Error unmarshaling updated config")
+				} else {
+					r.client.Update(context.TODO(), vaultConfig)
+				}
+			} else {
+				reqLogger.Info("Role already exists!")
+				configMap := &corev1.ConfigMap{}
+				err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
+				if err != nil {
+					reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
+				}
+				var policyTemplate string
+				if _, ok := configMap.Data["policy-template"]; !ok {
+					policyTemplate = defaultPolicyTemplate
+				} else {
+					policyTemplate = configMap.Data["policy-template"]
+				}
+				t := template.Must(template.New("policy").Parse(policyTemplate))
+				var parsedBuffer bytes.Buffer
+				t.Execute(&parsedBuffer, policyTemplateInput{
+					Name:      instance.ObjectMeta.Name,
+					Namespace: instance.ObjectMeta.Namespace,
+				})
+				existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
+				bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
 				configJsonData, _ := json.Marshal(bvConfig)
 				err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
 				if err != nil {
@@ -190,6 +235,15 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func getExistingPolicyIndex(policies []policy, name string) int {
+	for i, p := range policies {
+		if p.Name == name {
+			return i
+		}
+	}
+	return -1
 }
 
 func roleExists(roles []role, name string) bool {

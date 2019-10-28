@@ -5,6 +5,6 @@ metadata:
   namespace: vault
 data:
   policy-template: |
-    path "secret/{{ .ObjectMeta.Name }}" {
-      capabilities = ["create", "read", "update", "delete", "list"]
+    path "secret/{{ .Name }}" {
+      capabilities = ["read"]
     }

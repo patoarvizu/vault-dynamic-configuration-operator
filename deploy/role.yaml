@@ -30,6 +30,7 @@ rules:
   - get
   - create
   - list
+  - watch
 - apiGroups:
   - apps
   resources:
