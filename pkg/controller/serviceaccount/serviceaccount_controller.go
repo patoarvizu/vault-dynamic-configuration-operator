@@ -165,24 +165,24 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		if err != nil {
 			reqLogger.Error(err, "Error unmarshaling config")
 		} else {
+			configMap := &corev1.ConfigMap{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
+			if err != nil {
+				reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
+			}
+			var policyTemplate string
+			if val, ok := configMap.Data["policy-template"]; !ok {
+				policyTemplate = defaultPolicyTemplate
+			} else {
+				policyTemplate = val
+			}
+			t := template.Must(template.New("policy").Parse(policyTemplate))
+			var parsedBuffer bytes.Buffer
+			t.Execute(&parsedBuffer, policyTemplateInput{
+				Name:      instance.ObjectMeta.Name,
+				Namespace: instance.ObjectMeta.Namespace,
+			})
 			if !roleExists(bvConfig.Auth[0].Roles, instance.ObjectMeta.Name) {
-				configMap := &corev1.ConfigMap{}
-				err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
-				if err != nil {
-					reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
-				}
-				var policyTemplate string
-				if _, ok := configMap.Data["policy-template"]; !ok {
-					policyTemplate = defaultPolicyTemplate
-				} else {
-					policyTemplate = configMap.Data["policy-template"]
-				}
-				t := template.Must(template.New("policy").Parse(policyTemplate))
-				var parsedBuffer bytes.Buffer
-				t.Execute(&parsedBuffer, policyTemplateInput{
-					Name:      instance.ObjectMeta.Name,
-					Namespace: instance.ObjectMeta.Namespace,
-				})
 				newPolicy := &policy{
 					Name:  instance.ObjectMeta.Name,
 					Rules: parsedBuffer.String(),
@@ -195,41 +195,17 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 					Policies:                      []string{instance.ObjectMeta.Name},
 				}
 				bvConfig.Auth[0].Roles = append(bvConfig.Auth[0].Roles, *newRole)
-				configJsonData, _ := json.Marshal(bvConfig)
-				err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
-				if err != nil {
-					reqLogger.Error(err, "Error unmarshaling updated config")
-				} else {
-					r.client.Update(context.TODO(), vaultConfig)
-				}
+
 			} else {
-				reqLogger.Info("Role already exists!")
-				configMap := &corev1.ConfigMap{}
-				err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
-				if err != nil {
-					reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
-				}
-				var policyTemplate string
-				if _, ok := configMap.Data["policy-template"]; !ok {
-					policyTemplate = defaultPolicyTemplate
-				} else {
-					policyTemplate = configMap.Data["policy-template"]
-				}
-				t := template.Must(template.New("policy").Parse(policyTemplate))
-				var parsedBuffer bytes.Buffer
-				t.Execute(&parsedBuffer, policyTemplateInput{
-					Name:      instance.ObjectMeta.Name,
-					Namespace: instance.ObjectMeta.Namespace,
-				})
 				existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
 				bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
-				configJsonData, _ := json.Marshal(bvConfig)
-				err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
-				if err != nil {
-					reqLogger.Error(err, "Error unmarshaling updated config")
-				} else {
-					r.client.Update(context.TODO(), vaultConfig)
-				}
+			}
+			configJsonData, _ := json.Marshal(bvConfig)
+			err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
+			if err != nil {
+				reqLogger.Error(err, "Error unmarshaling updated config")
+			} else {
+				r.client.Update(context.TODO(), vaultConfig)
 			}
 		}
 	}
