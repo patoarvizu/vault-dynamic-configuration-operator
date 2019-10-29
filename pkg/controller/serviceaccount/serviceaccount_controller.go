@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"text/template"
 
 	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -118,7 +119,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	instance := &corev1.ServiceAccount{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
@@ -159,7 +160,11 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		Name:      instance.ObjectMeta.Name,
 		Namespace: instance.ObjectMeta.Namespace,
 	})
-	kubernetesAuthIndex := getKubernetesAuthIndex(bvConfig)
+	kubernetesAuthIndex, err := getKubernetesAuthIndex(bvConfig)
+	if err != nil {
+		reqLogger.Error(err, "Can't find kubernetes auth configuration")
+		return reconcile.Result{}, err
+	}
 	if !policyExists(bvConfig.Policies, instance.ObjectMeta.Name) {
 		newPolicy := &policy{
 			Name:  instance.ObjectMeta.Name,
@@ -190,13 +195,13 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, nil
 }
 
-func getKubernetesAuthIndex(bvConfig bankVaultsConfig) int {
+func getKubernetesAuthIndex(bvConfig bankVaultsConfig) (int, error) {
 	for i, a := range bvConfig.Auth {
 		if a.Type == "kubernetes" {
-			return i
+			return i, nil
 		}
 	}
-	return -1
+	return -1, errors.New("Not found")
 }
 
 func getExistingPolicyIndex(policies []policy, name string) int {
