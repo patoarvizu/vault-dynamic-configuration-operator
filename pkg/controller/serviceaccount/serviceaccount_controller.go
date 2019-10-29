@@ -160,12 +160,17 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		Namespace: instance.ObjectMeta.Namespace,
 	})
 	kubernetesAuthIndex := getKubernetesAuthIndex(bvConfig)
-	if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
+	if !policyExists(bvConfig.Policies, instance.ObjectMeta.Name) {
 		newPolicy := &policy{
 			Name:  instance.ObjectMeta.Name,
 			Rules: parsedBuffer.String(),
 		}
 		bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
+	} else {
+		existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
+		bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
+	}
+	if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
 		newRole := &role{
 			BoundServiceAccountNames:      instance.ObjectMeta.Name,
 			BoundServiceAccountNamespaces: instance.ObjectMeta.Namespace,
@@ -173,9 +178,6 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 			Policies:                      []string{instance.ObjectMeta.Name},
 		}
 		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
-	} else {
-		existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
-		bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
 	}
 	configJsonData, _ := json.Marshal(bvConfig)
 	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
@@ -208,6 +210,15 @@ func getExistingPolicyIndex(policies []policy, name string) int {
 
 func roleExists(roles []role, name string) bool {
 	for _, r := range roles {
+		if r.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func policyExists(policies []policy, name string) bool {
+	for _, r := range policies {
 		if r.Name == name {
 			return true
 		}
