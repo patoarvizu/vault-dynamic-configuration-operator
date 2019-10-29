@@ -134,59 +134,56 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	if err != nil {
 		reqLogger.Error(err, "Error getting Vault configuration")
 		return reconcile.Result{}, err
-	} else {
-		var bvConfig bankVaultsConfig
-		jsonData, _ := json.Marshal(vaultConfig.Spec.ExternalConfig)
-		err = json.Unmarshal(jsonData, &bvConfig)
-		if err != nil {
-			reqLogger.Error(err, "Error unmarshaling config")
-			return reconcile.Result{}, err
-		} else {
-			configMap := &corev1.ConfigMap{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
-			if err != nil {
-				reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
-			}
-			var policyTemplate string
-			if val, ok := configMap.Data["policy-template"]; !ok {
-				policyTemplate = defaultPolicyTemplate
-			} else {
-				policyTemplate = val
-			}
-			t := template.Must(template.New("policy").Parse(policyTemplate))
-			var parsedBuffer bytes.Buffer
-			t.Execute(&parsedBuffer, policyTemplateInput{
-				Name:      instance.ObjectMeta.Name,
-				Namespace: instance.ObjectMeta.Namespace,
-			})
-			kubernetesAuthIndex := getKubernetesAuthIndex(bvConfig)
-			if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
-				newPolicy := &policy{
-					Name:  instance.ObjectMeta.Name,
-					Rules: parsedBuffer.String(),
-				}
-				bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
-				newRole := &role{
-					BoundServiceAccountNames:      instance.ObjectMeta.Name,
-					BoundServiceAccountNamespaces: instance.ObjectMeta.Namespace,
-					Name:                          instance.ObjectMeta.Name,
-					Policies:                      []string{instance.ObjectMeta.Name},
-				}
-				bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
-			} else {
-				existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
-				bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
-			}
-			configJsonData, _ := json.Marshal(bvConfig)
-			err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
-			if err != nil {
-				reqLogger.Error(err, "Error unmarshaling updated config")
-				return reconcile.Result{}, err
-			} else {
-				r.client.Update(context.TODO(), vaultConfig)
-			}
-		}
 	}
+	var bvConfig bankVaultsConfig
+	jsonData, _ := json.Marshal(vaultConfig.Spec.ExternalConfig)
+	err = json.Unmarshal(jsonData, &bvConfig)
+	if err != nil {
+		reqLogger.Error(err, "Error unmarshaling config")
+		return reconcile.Result{}, err
+	}
+	configMap := &corev1.ConfigMap{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
+	if err != nil {
+		reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
+	}
+	var policyTemplate string
+	if val, ok := configMap.Data["policy-template"]; !ok {
+		policyTemplate = defaultPolicyTemplate
+	} else {
+		policyTemplate = val
+	}
+	t := template.Must(template.New("policy").Parse(policyTemplate))
+	var parsedBuffer bytes.Buffer
+	t.Execute(&parsedBuffer, policyTemplateInput{
+		Name:      instance.ObjectMeta.Name,
+		Namespace: instance.ObjectMeta.Namespace,
+	})
+	kubernetesAuthIndex := getKubernetesAuthIndex(bvConfig)
+	if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
+		newPolicy := &policy{
+			Name:  instance.ObjectMeta.Name,
+			Rules: parsedBuffer.String(),
+		}
+		bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
+		newRole := &role{
+			BoundServiceAccountNames:      instance.ObjectMeta.Name,
+			BoundServiceAccountNamespaces: instance.ObjectMeta.Namespace,
+			Name:                          instance.ObjectMeta.Name,
+			Policies:                      []string{instance.ObjectMeta.Name},
+		}
+		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
+	} else {
+		existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
+		bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
+	}
+	configJsonData, _ := json.Marshal(bvConfig)
+	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
+	if err != nil {
+		reqLogger.Error(err, "Error unmarshaling updated config")
+		return reconcile.Result{}, err
+	}
+	r.client.Update(context.TODO(), vaultConfig)
 
 	return reconcile.Result{}, nil
 }
