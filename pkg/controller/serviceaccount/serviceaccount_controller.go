@@ -182,7 +182,8 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 				Name:      instance.ObjectMeta.Name,
 				Namespace: instance.ObjectMeta.Namespace,
 			})
-			if !roleExists(bvConfig.Auth[0].Roles, instance.ObjectMeta.Name) {
+			kubernetesAuthIndex := getKubernetesAuthIndex(bvConfig)
+			if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
 				newPolicy := &policy{
 					Name:  instance.ObjectMeta.Name,
 					Rules: parsedBuffer.String(),
@@ -194,8 +195,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 					Name:                          instance.ObjectMeta.Name,
 					Policies:                      []string{instance.ObjectMeta.Name},
 				}
-				bvConfig.Auth[0].Roles = append(bvConfig.Auth[0].Roles, *newRole)
-
+				bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
 			} else {
 				existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
 				bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
@@ -211,6 +211,15 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func getKubernetesAuthIndex(bvConfig bankVaultsConfig) int {
+	for i, a := range bvConfig.Auth {
+		if a.Type == "kubernetes" {
+			return i
+		}
+	}
+	return -1
 }
 
 func getExistingPolicyIndex(policies []policy, name string) int {

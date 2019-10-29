@@ -18,3 +18,21 @@ rules:
   verbs:
   - list
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - create
+  - list
+  - watch
+- apiGroups:
+  - vault.banzaicloud.com
+  resources:
+  - vaults
+  verbs:
+  - get
+  - list
+  - watch
+  - update
