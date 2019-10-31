@@ -7,34 +7,8 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - serviceaccounts
+  - pods
   verbs:
   - list
   - get
   - watch
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - create
-  - list
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - deployments/finalizers
-  resourceNames:
-  - vault-dynamic-configuration-operator
-  verbs:
-  - update
-- apiGroups:
-  - vault.banzaicloud.com
-  resources:
-  - vaults
-  verbs:
-  - get
-  - list
-  - watch
-  - update
