@@ -20,6 +20,7 @@ spec:
           image: vault-dynamic-configuration-operator:latest
           command:
           - vault-dynamic-configuration-operator
+          - --auto-configure-annotation=vault.patoarvizu.dev/auto-configure
           imagePullPolicy: Never
           env:
             - name: WATCH_NAMESPACE

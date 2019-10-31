@@ -15,6 +15,7 @@ import (
 	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
 	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/apis"
 	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/controller"
+	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/controller/serviceaccount"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
@@ -54,6 +55,9 @@ func main() {
 	// Add flags registered by imported packages (e.g. glog and
 	// controller-runtime)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+
+	pflag.StringVar(&serviceaccount.TargetVaultName, "target-vault-name", "vault", "Name of Vault custom resource to target")
+	pflag.StringVar(&serviceaccount.AutoConfigureAnnotation, "auto-configure-annotation", "vault.patoarvizu.dev/auto-configure", "Annotation the operator should watch for in service accounts")
 
 	pflag.Parse()
 

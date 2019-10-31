@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,6 +20,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+)
+
+var (
+	TargetVaultName         string
+	AutoConfigureAnnotation string
 )
 
 const defaultPolicyTemplate = "path \"secret/{{ .Name }}\" { capabilities = [\"read\"] }"
@@ -55,7 +61,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 					serviceAccounts := &corev1.ServiceAccountList{}
 					mgr.GetClient().List(context.TODO(), serviceAccounts, client.InNamespace(ns.ObjectMeta.Name))
 					for _, sa := range serviceAccounts.Items {
-						if val, ok := sa.ObjectMeta.Annotations["vault.patoarvizu.dev/auto-configure"]; ok {
+						if val, ok := sa.ObjectMeta.Annotations[AutoConfigureAnnotation]; ok {
 							if val == "true" {
 								requests = append(requests, reconcile.Request{
 									NamespacedName: types.NamespacedName{
@@ -125,13 +131,14 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 
-	if val, ok := instance.Annotations["vault.patoarvizu.dev/auto-configure"]; !ok || val != "true" {
+	if val, ok := instance.Annotations[AutoConfigureAnnotation]; !ok || val != "true" {
 		reqLogger.Info("Service account not annotated or auto-configure set to 'false'", "ServiceAccount", instance.ObjectMeta.Name)
 		return reconcile.Result{}, nil
 	}
 
 	vaultConfig := &bankvaultsv1alpha1.Vault{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault", Namespace: "vault"}, vaultConfig)
+	ns, _ := k8sutil.GetOperatorNamespace()
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: TargetVaultName, Namespace: ns}, vaultConfig)
 	if err != nil {
 		reqLogger.Error(err, "Error getting Vault configuration")
 		return reconcile.Result{}, err
