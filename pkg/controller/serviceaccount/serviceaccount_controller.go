@@ -111,6 +111,7 @@ type role struct {
 	BoundServiceAccountNamespaces string   `json:"bound_service_account_namespaces"`
 	Name                          string   `json:"name"`
 	Policies                      []string `json:"policies"`
+	Ttl                           string   `json:"ttl,omitempty"`
 }
 
 type policyTemplateInput struct {
