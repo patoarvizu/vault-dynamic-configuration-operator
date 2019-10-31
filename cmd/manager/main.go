@@ -58,6 +58,7 @@ func main() {
 
 	pflag.StringVar(&serviceaccount.TargetVaultName, "target-vault-name", "vault", "Name of Vault custom resource to target")
 	pflag.StringVar(&serviceaccount.AutoConfigureAnnotation, "auto-configure-annotation", "vault.patoarvizu.dev/auto-configure", "Annotation the operator should watch for in service accounts")
+	pflag.BoolVar(&serviceaccount.BoundRolesToAllNamespaces, "bound-roles-to-all-namespaces", false, "Set 'bound_service_account_namespaces' to '*' instead of the service account's namespace")
 
 	pflag.Parse()
 

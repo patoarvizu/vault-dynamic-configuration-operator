@@ -23,8 +23,9 @@ import (
 )
 
 var (
-	TargetVaultName         string
-	AutoConfigureAnnotation string
+	TargetVaultName           string
+	AutoConfigureAnnotation   string
+	BoundRolesToAllNamespaces bool
 )
 
 const defaultPolicyTemplate = "path \"secret/{{ .Name }}\" { capabilities = [\"read\"] }"
@@ -185,10 +186,16 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 	if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
 		newRole := &role{
-			BoundServiceAccountNames:      instance.ObjectMeta.Name,
-			BoundServiceAccountNamespaces: instance.ObjectMeta.Namespace,
-			Name:                          instance.ObjectMeta.Name,
-			Policies:                      []string{instance.ObjectMeta.Name},
+			BoundServiceAccountNames: instance.ObjectMeta.Name,
+			BoundServiceAccountNamespaces: func(namespace string) string {
+				if BoundRolesToAllNamespaces {
+					return "*"
+				} else {
+					return namespace
+				}
+			}(instance.ObjectMeta.Namespace),
+			Name:     instance.ObjectMeta.Name,
+			Policies: []string{instance.ObjectMeta.Name},
 		}
 		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
 	}
@@ -201,6 +208,14 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	r.client.Update(context.TODO(), vaultConfig)
 
 	return reconcile.Result{}, nil
+}
+
+func getBoundServiceAccountNamespace(namespace string) string {
+	if BoundRolesToAllNamespaces {
+		return "*"
+	} else {
+		return namespace
+	}
 }
 
 func getKubernetesAuthIndex(bvConfig bankVaultsConfig) (int, error) {

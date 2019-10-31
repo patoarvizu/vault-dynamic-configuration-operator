@@ -21,6 +21,7 @@ spec:
           command:
           - vault-dynamic-configuration-operator
           - --auto-configure-annotation=vault.patoarvizu.dev/auto-configure
+          - --bound-roles-to-all-namespaces=false
           imagePullPolicy: Never
           env:
             - name: WATCH_NAMESPACE
