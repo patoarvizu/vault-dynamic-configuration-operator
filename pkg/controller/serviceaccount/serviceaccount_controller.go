@@ -26,6 +26,7 @@ var (
 	TargetVaultName           string
 	AutoConfigureAnnotation   string
 	BoundRolesToAllNamespaces bool
+	TokenTtl                  string
 )
 
 const defaultPolicyTemplate = "path \"secret/{{ .Name }}\" { capabilities = [\"read\"] }"
@@ -203,6 +204,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 			}(instance.ObjectMeta.Namespace),
 			Name:          instance.ObjectMeta.Name,
 			TokenPolicies: []string{instance.ObjectMeta.Name},
+			TokenTtl:      TokenTtl,
 		}
 		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
 	}
