@@ -111,8 +111,15 @@ type role struct {
 	BoundServiceAccountNames      string   `json:"bound_service_account_names"`
 	BoundServiceAccountNamespaces string   `json:"bound_service_account_namespaces"`
 	Name                          string   `json:"name"`
-	Policies                      []string `json:"policies"`
-	Ttl                           string   `json:"ttl,omitempty"`
+	TokenPolicies                 []string `json:"token_policies"`
+	TokenTtl                      string   `json:"token_ttl,omitempty"`
+	TokenMaxTtl                   string   `json:"token_max_ttl,omitempty"`
+	TokenBoundCidrs               []string `json:"token_bound_cidrs,omitempty"`
+	TokenExplicitMaxTtl           string   `json:"token_explicit_max_ttl,omitempty"`
+	TokenNoDefaultPolicy          bool     `json:"token_no_default_policy,omitempty"`
+	TokenNumUses                  int      `json:"token_num_uses,omitempty"`
+	TokenPeriod                   string   `json:"token_period,omitempty"`
+	TokenType                     string   `json:"token_type,omitempty"`
 }
 
 type policyTemplateInput struct {
@@ -194,8 +201,8 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 					return namespace
 				}
 			}(instance.ObjectMeta.Namespace),
-			Name:     instance.ObjectMeta.Name,
-			Policies: []string{instance.ObjectMeta.Name},
+			Name:          instance.ObjectMeta.Name,
+			TokenPolicies: []string{instance.ObjectMeta.Name},
 		}
 		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
 	}
