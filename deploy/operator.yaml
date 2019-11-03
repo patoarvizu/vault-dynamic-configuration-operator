@@ -17,11 +17,10 @@ spec:
       containers:
         - name: vault-dynamic-configuration-operator
           # Replace this with the built image name
-          image: vault-dynamic-configuration-operator:latest
+          image: patoarvizu/vault-dynamic-configuration-operator:latest
           command:
           - vault-dynamic-configuration-operator
           - --auto-configure-annotation=vault.patoarvizu.dev/auto-configure
-          - --bound-roles-to-all-namespaces=false
           imagePullPolicy: Never
           env:
             - name: WATCH_NAMESPACE
