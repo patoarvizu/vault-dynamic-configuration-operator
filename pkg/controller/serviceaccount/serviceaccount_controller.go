@@ -123,15 +123,15 @@ type dbConfiguration struct {
 }
 
 type dbConfig struct {
-	Name                  string   `json:"name"`
-	PluginName            string   `json:"plugin_name"`
-	MaxOpenConnections    int      `json:"max_open_connections,omitempty"`
-	MaxIdleConnections    int      `json:"max_idle_connections,omitempty"`
-	MaxConnectionLifetime string   `json:"max_connection_lifetime,omitempty"`
-	ConnectionUrl         string   `json:"connection_url"`
-	AllowedRoles          []string `json:"allowed_roles"`
-	Username              string   `json:"username"`
-	Password              string   `json:"password"`
+	Name                  string      `json:"name"`
+	PluginName            string      `json:"plugin_name"`
+	MaxOpenConnections    int         `json:"max_open_connections,omitempty"`
+	MaxIdleConnections    int         `json:"max_idle_connections,omitempty"`
+	MaxConnectionLifetime string      `json:"max_connection_lifetime,omitempty"`
+	ConnectionUrl         string      `json:"connection_url"`
+	AllowedRoles          interface{} `json:"allowed_roles"`
+	Username              string      `json:"username"`
+	Password              string      `json:"password"`
 }
 
 type dbRole struct {
