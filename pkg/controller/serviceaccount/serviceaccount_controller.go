@@ -33,6 +33,8 @@ var (
 
 const defaultPolicyTemplate = "path \"secret/{{ .Name }}\" { capabilities = [\"read\"] }"
 const defaultDynamicDBUserCreationStatement = "CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT ALL ON *.* TO '{{name}}'@'%';"
+const defaultDbDefaultTtl = "1h"
+const defaultDbMaxTtl = "24h"
 
 var log = logf.Log.WithName("controller_serviceaccount")
 
@@ -263,6 +265,20 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		creationStatement = val
 	}
 
+	var dbDefaultTtl string
+	if val, ok := configMap.Data["db-default-ttl"]; !ok {
+		dbDefaultTtl = defaultDbDefaultTtl
+	} else {
+		dbDefaultTtl = val
+	}
+
+	var dbMaxTtl string
+	if val, ok := configMap.Data["db-max-ttl"]; !ok {
+		dbMaxTtl = defaultDbMaxTtl
+	} else {
+		dbMaxTtl = val
+	}
+
 	dbSecretsIndex, err := getDBSecretsIndex(bvConfig)
 	if err != nil {
 		reqLogger.Error(err, "Can't find database secrets configuration")
@@ -274,6 +290,8 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 			Name:               instance.ObjectMeta.Name,
 			DbName:             targetDb,
 			CreationStatements: []string{creationStatement},
+			DefaultTtl:         dbDefaultTtl,
+			MaxTtl:             dbMaxTtl,
 		}
 		bvConfig.Secrets[dbSecretsIndex].Configuration.Roles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, *newDbRole)
 	}
