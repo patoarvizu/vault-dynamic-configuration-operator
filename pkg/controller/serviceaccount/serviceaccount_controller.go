@@ -125,15 +125,15 @@ type dbConfiguration struct {
 }
 
 type dbConfig struct {
-	Name                  string      `json:"name"`
-	PluginName            string      `json:"plugin_name"`
-	MaxOpenConnections    int         `json:"max_open_connections,omitempty"`
-	MaxIdleConnections    int         `json:"max_idle_connections,omitempty"`
-	MaxConnectionLifetime string      `json:"max_connection_lifetime,omitempty"`
-	ConnectionUrl         string      `json:"connection_url"`
-	AllowedRoles          interface{} `json:"allowed_roles"`
-	Username              string      `json:"username"`
-	Password              string      `json:"password"`
+	Name                  string   `json:"name"`
+	PluginName            string   `json:"plugin_name"`
+	MaxOpenConnections    int      `json:"max_open_connections,omitempty"`
+	MaxIdleConnections    int      `json:"max_idle_connections,omitempty"`
+	MaxConnectionLifetime string   `json:"max_connection_lifetime,omitempty"`
+	ConnectionUrl         string   `json:"connection_url"`
+	AllowedRoles          []string `json:"allowed_roles"`
+	Username              string   `json:"username"`
+	Password              string   `json:"password"`
 }
 
 type dbRole struct {
@@ -244,8 +244,8 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		}
 		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
 	}
-	configJsonData, _ := json.Marshal(bvConfig)
-	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
+	configJsonData, _ := json.Marshal(bvConfig.Auth[kubernetesAuthIndex])
+	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["auth"].([]interface{})[kubernetesAuthIndex])
 	if err != nil {
 		reqLogger.Error(err, "Error unmarshaling updated config")
 		return reconcile.Result{}, err
@@ -295,19 +295,19 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		}
 		dbConfigIndex, err := getDbConfigIndex(bvConfig.Secrets[dbSecretsIndex], targetDb)
 		if err != nil {
-			reqLogger.Error(err, "Can'ttarget database secrets configuration")
+			reqLogger.Error(err, "Can't find target database secrets configuration")
 			return reconcile.Result{}, err
 		}
-		bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles.([]interface{}), instance.ObjectMeta.Name)
+		bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles, instance.ObjectMeta.Name)
 		bvConfig.Secrets[dbSecretsIndex].Configuration.Roles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, *newDbRole)
 	}
 
-	configJsonData, err = json.Marshal(bvConfig)
+	configJsonData, err = json.Marshal(bvConfig.Secrets[dbSecretsIndex])
 	if err != nil {
 		reqLogger.Error(err, "Error marshaling updated config")
 		return reconcile.Result{}, err
 	}
-	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
+	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["secrets"].([]interface{})[dbSecretsIndex])
 	if err != nil {
 		reqLogger.Error(err, "Error unmarshaling updated config")
 		return reconcile.Result{}, err
