@@ -52,7 +52,9 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.StringVar(&serviceaccount.TargetVaultName, "target-vault-name", "vault", "Name of Vault custom resource to target")
-	pflag.StringVar(&serviceaccount.AutoConfigureAnnotation, "auto-configure-annotation", "vault.patoarvizu.dev/auto-configure", "Annotation the operator should watch for in service accounts")
+	pflag.StringVar(&serviceaccount.AnnotationPrefix, "annotation-prefix", "vault.patoarvizu.dev", "Prefix of the annotations the operator should watch for in service accounts to configure roles and policies")
+	pflag.StringVar(&serviceaccount.AutoConfigureAnnotation, "auto-configure-annotation", "auto-configure", "Annotation the operator should watch for in service accounts")
+	pflag.StringVar(&serviceaccount.DynamicDBCredentialsAnnotation, "auto-configuredb-creds-annotation", "db-dynamic-creds", "Annotation the operator should watch for in service accounts to configure access to dynamic DB credentials")
 	pflag.BoolVar(&serviceaccount.BoundRolesToAllNamespaces, "bound-roles-to-all-namespaces", false, "Set 'bound_service_account_namespaces' to '*' instead of the service account's namespace")
 	pflag.StringVar(&serviceaccount.TokenTtl, "token-ttl", "5m", "Value to set roles' 'token_ttl' to")
 

@@ -30,7 +30,9 @@ The purpose of this operator is to provide a mechanism to automatically add indi
 Flag | Description | Default
 ---------|----------|---------
  `--target-vault-name` | Name of the Bank-Vaults CRD to target for modifications. The CRD must be deployed in the same namespace as the operator. | `vault`
- `--auto-configure-annotation` | The annotation that must be added to `ServiceAccount` objects to automatically configure it for Vault access. The value of the annotation must be `"true"`, any other value will be ignored. | `vault.patoarvizu.dev/auto-configure`
+ `--annotation-prefix` | The prefix to all annotations used and discovered by the controller. | `vault.patoarvizu.dev`
+ `--auto-configure-annotation` | The annotation that must be appended to the `--annotation-prefix` value (with a `/` as a separator between the two) and added to `ServiceAccount` objects to automatically configure it for Vault access. The value of the annotation must be `"true"`, any other value will be ignored. | `auto-configure`
+ `--dynamic-db-credentials-annotation` | The annotation that must be appended to the `--annotation-prefix` value (with a `/` as a separator between the two) and added to `ServiceAccount` objects to automatically configure it for having access to generate dynamic database credentials. The value of the annotation must be `"true"`, any other value will be ignored. | `db-dynamic-creds`
  `--bound-roles-to-all-namespaces` | Set `bound_service_account_namespaces` to `'*'` instead of the service account's namespace. | `false`
  `--token-ttl` | Value to set roles' `token_ttl` to | `5m`
 

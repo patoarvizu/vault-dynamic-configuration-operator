@@ -23,13 +23,16 @@ import (
 )
 
 var (
-	TargetVaultName           string
-	AutoConfigureAnnotation   string
-	BoundRolesToAllNamespaces bool
-	TokenTtl                  string
+	TargetVaultName                string
+	AnnotationPrefix               string
+	AutoConfigureAnnotation        string
+	DynamicDBCredentialsAnnotation string
+	BoundRolesToAllNamespaces      bool
+	TokenTtl                       string
 )
 
 const defaultPolicyTemplate = "path \"secret/{{ .Name }}\" { capabilities = [\"read\"] }"
+const defaultDynamicDBUserCreationStatement = "CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT ALL ON *.* TO '{{name}}'@'%';"
 
 var log = logf.Log.WithName("controller_serviceaccount")
 
@@ -96,6 +99,7 @@ type ReconcileServiceAccount struct {
 type bankVaultsConfig struct {
 	Auth     []auth   `json:"auth"`
 	Policies []policy `json:"policies"`
+	Secrets  []secret `json:"secrets,omitempty"`
 }
 
 type auth struct {
@@ -106,6 +110,36 @@ type auth struct {
 type policy struct {
 	Name  string `json:"name"`
 	Rules string `json:"rules"`
+}
+
+type secret struct {
+	Type          string          `json:"type"`
+	Configuration dbConfiguration `json:"configuration"`
+}
+
+type dbConfiguration struct {
+	Config []dbConfig `json:"config"`
+	Roles  []dbRole   `json:"roles"`
+}
+
+type dbConfig struct {
+	Name                  string   `json:"name"`
+	PluginName            string   `json:"plugin_name"`
+	MaxOpenConnections    int      `json:"max_open_connections,omitempty"`
+	MaxIdleConnections    int      `json:"max_idle_connections,omitempty"`
+	MaxConnectionLifetime string   `json:"max_connection_lifetime,omitempty"`
+	ConnectionUrl         string   `json:"connection_url"`
+	AllowedRoles          []string `json:"allowed_roles"`
+	Username              string   `json:"username"`
+	Password              string   `json:"password"`
+}
+
+type dbRole struct {
+	Name               string   `json:"name"`
+	DbName             string   `json:"db_name"`
+	CreationStatements []string `json:"creation_statements"`
+	DefaultTtl         string   `json:"default_ttl,omitempty"`
+	MaxTtl             string   `json:"max_ttl,omitempty"`
 }
 
 type role struct {
@@ -141,7 +175,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 
-	if val, ok := instance.Annotations[AutoConfigureAnnotation]; !ok || val != "true" {
+	if val, ok := instance.Annotations[AnnotationPrefix+"/"+AutoConfigureAnnotation]; !ok || val != "true" {
 		reqLogger.Info("Service account not annotated or auto-configure set to 'false'", "ServiceAccount", instance.ObjectMeta.Name)
 		return reconcile.Result{}, nil
 	}
@@ -216,6 +250,46 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 	r.client.Update(context.TODO(), vaultConfig)
 
+	targetDb, ok := instance.Annotations[AnnotationPrefix+"/"+DynamicDBCredentialsAnnotation]
+	if !ok {
+		reqLogger.Info("Service account not annotated for dynamic database credentials", "ServiceAccount", instance.ObjectMeta.Name)
+		return reconcile.Result{}, nil
+	}
+
+	var creationStatement string
+	if val, ok := configMap.Data["db-user-creation-statement"]; !ok {
+		creationStatement = defaultDynamicDBUserCreationStatement
+	} else {
+		creationStatement = val
+	}
+
+	dbSecretsIndex, err := getDBSecretsIndex(bvConfig)
+	if err != nil {
+		reqLogger.Error(err, "Can't find database secrets configuration")
+		return reconcile.Result{}, err
+	}
+
+	if !dbRoleExists(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, instance.ObjectMeta.Name) {
+		newDbRole := &dbRole{
+			Name:               instance.ObjectMeta.Name,
+			DbName:             targetDb,
+			CreationStatements: []string{creationStatement},
+		}
+		bvConfig.Secrets[dbSecretsIndex].Configuration.Roles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, *newDbRole)
+	}
+
+	configJsonData, err = json.Marshal(bvConfig)
+	if err != nil {
+		reqLogger.Error(err, "Error marshaling updated config")
+		return reconcile.Result{}, err
+	}
+	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig)
+	if err != nil {
+		reqLogger.Error(err, "Error unmarshaling updated config")
+		return reconcile.Result{}, err
+	}
+	r.client.Update(context.TODO(), vaultConfig)
+
 	return reconcile.Result{}, nil
 }
 
@@ -227,13 +301,22 @@ func getBoundServiceAccountNamespace(namespace string) string {
 	}
 }
 
+func getDBSecretsIndex(bvConfig bankVaultsConfig) (int, error) {
+	for i, a := range bvConfig.Secrets {
+		if a.Type == "database" {
+			return i, nil
+		}
+	}
+	return -1, errors.New("Database secrets configuration not found")
+}
+
 func getKubernetesAuthIndex(bvConfig bankVaultsConfig) (int, error) {
 	for i, a := range bvConfig.Auth {
 		if a.Type == "kubernetes" {
 			return i, nil
 		}
 	}
-	return -1, errors.New("Not found")
+	return -1, errors.New("Kubernetes authentication configuration not found")
 }
 
 func getExistingPolicyIndex(policies []policy, name string) int {
@@ -247,6 +330,15 @@ func getExistingPolicyIndex(policies []policy, name string) int {
 
 func roleExists(roles []role, name string) bool {
 	for _, r := range roles {
+		if r.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func dbRoleExists(dbRoles []dbRole, name string) bool {
+	for _, r := range dbRoles {
 		if r.Name == name {
 			return true
 		}
