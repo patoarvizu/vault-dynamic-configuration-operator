@@ -293,6 +293,12 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 			DefaultTtl:         dbDefaultTtl,
 			MaxTtl:             dbMaxTtl,
 		}
+		dbConfigIndex, err := getDbConfigIndex(bvConfig.Secrets[dbSecretsIndex], targetDb)
+		if err != nil {
+			reqLogger.Error(err, "Can'ttarget database secrets configuration")
+			return reconcile.Result{}, err
+		}
+		bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles.([]interface{}), instance.ObjectMeta.Name)
 		bvConfig.Secrets[dbSecretsIndex].Configuration.Roles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, *newDbRole)
 	}
 
@@ -320,12 +326,21 @@ func getBoundServiceAccountNamespace(namespace string) string {
 }
 
 func getDBSecretsIndex(bvConfig bankVaultsConfig) (int, error) {
-	for i, a := range bvConfig.Secrets {
-		if a.Type == "database" {
+	for i, s := range bvConfig.Secrets {
+		if s.Type == "database" {
 			return i, nil
 		}
 	}
 	return -1, errors.New("Database secrets configuration not found")
+}
+
+func getDbConfigIndex(dbSecret secret, targetDb string) (int, error) {
+	for i, c := range dbSecret.Configuration.Config {
+		if c.Name == targetDb {
+			return i, nil
+		}
+	}
+	return -1, errors.New("Database configuration not found")
 }
 
 func getKubernetesAuthIndex(bvConfig bankVaultsConfig) (int, error) {
