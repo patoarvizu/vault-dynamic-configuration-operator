@@ -6,6 +6,8 @@
 
 - [Vault dynamic configuration Operator](#vault-dynamic-configuration-operator)
     - [Intro](#intro)
+    - [Auto-configure roles and policies](#auto-configure-roles-and-policies)
+    - [Auto-configure dynamic database credentials](#auto-configure-dynamic-database-credentials)
     - [Configuration](#configuration)
         - [Operator command-line flags](#operator-command-line-flags)
         - [Operator permissions](#operator-permissions)
@@ -23,6 +25,20 @@ The [Bank Vaults Operator](https://github.com/banzaicloud/bank-vaults/tree/maste
 
 The purpose of this operator is to provide a mechanism to automatically add individual services' configuration (roles and policies) based on annotations added to `ServiceAccount`s.
 
+## Auto-configure roles and policies
+
+The operator will listen for `ServiceAccount` objects and add a Kubernetes [role](https://www.vaultproject.io/api/auth/kubernetes/index.html#create-role) to the Vault auth configuration, and attach to it the configured policy (or rendered policy template).
+
+Note that this operator doesn't enforce that the annotated `ServiceAccount` is attached to any specific workload (`Pod`, `Deployment`, `StatefulSet`, etc.), that enforcement should come from another source, like an [Admission Controller](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/) or [Open Policy Agent](https://www.openpolicyagent.org/).
+
+## Auto-configure dynamic database credentials
+
+Additionally, if the service account is annotated with `vault.patoarvizu.dev/db-dynamic-creds` (or the custom values, if overwritten on the command line), the operator will add a [role](https://www.vaultproject.io/api/secret/databases/index.html#create-role) for dynamic database credentials. One or more database [connections](https://www.vaultproject.io/api/secret/databases/index.html#create-role) should be previously configured with the appropriate credentials.
+
+The operator will take the value of the annotation and create a new role for the database connection with that name, and add the service name as an [allowed role](https://www.vaultproject.io/api/secret/databases/index.html#allowed_roles). All new roles will be created using the values of `db-user-creation-statement`, `db-default-ttl`, and `db-max-ttl` from the `vault-dynamic-configuration` `ConfigMap`.
+
+As of this version, only [MySQL/MariaDB](https://www.vaultproject.io/api/secret/databases/mysql-maria.html) dynamic credentials are supported.
+
 ## Configuration
 
 ### Operator command-line flags
@@ -30,7 +46,9 @@ The purpose of this operator is to provide a mechanism to automatically add indi
 Flag | Description | Default
 ---------|----------|---------
  `--target-vault-name` | Name of the Bank-Vaults CRD to target for modifications. The CRD must be deployed in the same namespace as the operator. | `vault`
- `--auto-configure-annotation` | The annotation that must be added to `ServiceAccount` objects to automatically configure it for Vault access. The value of the annotation must be `"true"`, any other value will be ignored. | `vault.patoarvizu.dev/auto-configure`
+ `--annotation-prefix` | The prefix to all annotations used and discovered by the controller. | `vault.patoarvizu.dev`
+ `--auto-configure-annotation` | The annotation that must be appended to the `--annotation-prefix` value (with a `/` as a separator between the two) and added to `ServiceAccount` objects to automatically configure it for Vault access. The value of the annotation must be `"true"`, any other value will be ignored. | `auto-configure`
+ `--dynamic-db-credentials-annotation` | The annotation that must be appended to the `--annotation-prefix` value (with a `/` as a separator between the two) and added to `ServiceAccount` objects to automatically configure it for having access to generate dynamic database credentials. The value of the annotation must be `"true"`, any other value will be ignored. | `db-dynamic-creds`
  `--bound-roles-to-all-namespaces` | Set `bound_service_account_namespaces` to `'*'` instead of the service account's namespace. | `false`
  `--token-ttl` | Value to set roles' `token_ttl` to | `5m`
 
