@@ -244,12 +244,17 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		}
 		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
 	}
-	configJsonData, _ := json.Marshal(bvConfig.Auth[kubernetesAuthIndex])
+	configJsonData, err := json.Marshal(bvConfig.Auth[kubernetesAuthIndex])
+	if err != nil {
+		reqLogger.Error(err, "Error marshaling updated config")
+		return reconcile.Result{}, err
+	}
 	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["auth"].([]interface{})[kubernetesAuthIndex])
 	if err != nil {
 		reqLogger.Error(err, "Error unmarshaling updated config")
 		return reconcile.Result{}, err
 	}
+	vaultConfig.Spec.ExternalConfig["policies"] = bvConfig.Policies
 	r.client.Update(context.TODO(), vaultConfig)
 
 	targetDb, ok := instance.Annotations[AnnotationPrefix+"/"+DynamicDBCredentialsAnnotation]
