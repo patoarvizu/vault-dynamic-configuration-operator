@@ -15,14 +15,19 @@ import (
 )
 
 type webhookCfg struct {
-	certFile string
-	keyFile  string
-	addr     string
+	certFile             string
+	keyFile              string
+	addr                 string
+	annotationPrefix     string
+	autoInjectAnnotation string
+	targetVaultAddress   string
+	kubernetesAuthPath   string
 }
+
+var cfg = &webhookCfg{}
 
 func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 	logger := &log.Std{}
-	logger.Infof("Injecting Vault sidecar")
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		return false, nil
@@ -32,10 +37,10 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 		return false, nil
 	}
 
-	if val, ok := pod.Annotations["vault.patoarvizu.dev/auto-inject"]; !ok || val != "true" {
+	if val, ok := pod.Annotations[fmt.Sprintf("%s/%s", cfg.annotationPrefix, cfg.autoInjectAnnotation)]; !ok || val != "true" {
 		return false, nil
 	}
-
+	logger.Infof("Injecting Vault sidecar")
 	for i, c := range pod.Spec.Containers {
 		found := false
 		for _, e := range c.Env {
@@ -58,19 +63,6 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, corev1.EnvVar{Name: "VAULT_SKIP_VERIFY", Value: "true"})
 		}
 	}
-
-	// config, err := rest.InClusterConfig()
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "Error getting client: %s", err)
-	// }
-	// clientset, err := kubernetes.NewForConfig(config)
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "Error getting clientset: %s", err)
-	// }
-	// configMap, err := clientset.CoreV1().ConfigMaps("default").Get("vault-agent-config", metav1.GetOptions{})
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "Error getting config map: %s", err)
-	// }
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes,
 		corev1.Volume{
@@ -107,6 +99,14 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 			{
 				Name:  "SERVICE",
 				Value: pod.Spec.ServiceAccountName,
+			},
+			{
+				Name:  "TARGET_VAULT_ADDRESS",
+				Value: cfg.targetVaultAddress,
+			},
+			{
+				Name:  "KUBERNETES_AUTH_PATH",
+				Value: cfg.kubernetesAuthPath,
 			},
 		},
 		VolumeMounts: []corev1.VolumeMount{
@@ -148,10 +148,13 @@ func main() {
 	logger := &log.Std{}
 	logger.Infof("Starting webhook!")
 
-	cfg := &webhookCfg{}
 	fl := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fl.StringVar(&cfg.certFile, "tls-cert-file", "", "TLS certificate file")
 	fl.StringVar(&cfg.keyFile, "tls-key-file", "", "TLS key file")
+	fl.StringVar(&cfg.annotationPrefix, "annotation-prefix", "vault.patoarvizu.dev", "Prefix of the annotations the webhook will process")
+	fl.StringVar(&cfg.autoInjectAnnotation, "agent-auto-inject-annotation", "agent-auto-inject", "Annotation the webhook will look for in pods")
+	fl.StringVar(&cfg.targetVaultAddress, "target-vault-address", "https://vault:8200", "Address of remote Vault API")
+	fl.StringVar(&cfg.kubernetesAuthPath, "kubernetes-auth-path", "auth/kubernetes", "Path to Vault Kubernetes auth endpoint")
 	fl.StringVar(&cfg.addr, "listen-addr", ":4443", "The address to start the server")
 
 	fl.Parse(os.Args[1:])
