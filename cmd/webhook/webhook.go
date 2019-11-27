@@ -22,6 +22,7 @@ type webhookCfg struct {
 	autoInjectAnnotation string
 	targetVaultAddress   string
 	kubernetesAuthPath   string
+	vaultImageVersion    string
 }
 
 var cfg = &webhookCfg{}
@@ -113,7 +114,7 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 
 	pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{
 		Name:  "vault-agent",
-		Image: "vault:1.3.0",
+		Image: "vault:" + cfg.vaultImageVersion,
 		Args: []string{
 			"agent",
 			"-config=/etc/vault/vault-agent-config.hcl",
@@ -145,6 +146,7 @@ func main() {
 	fl.StringVar(&cfg.autoInjectAnnotation, "agent-auto-inject-annotation", "agent-auto-inject", "Annotation the webhook will look for in pods")
 	fl.StringVar(&cfg.targetVaultAddress, "target-vault-address", "https://vault:8200", "Address of remote Vault API")
 	fl.StringVar(&cfg.kubernetesAuthPath, "kubernetes-auth-path", "auth/kubernetes", "Path to Vault Kubernetes auth endpoint")
+	fl.StringVar(&cfg.vaultImageVersion, "vault-image-version", "1.3.0", "Tag on the 'vault' Docker image to inject with the sidecar")
 	fl.StringVar(&cfg.addr, "listen-addr", ":4443", "The address to start the server")
 
 	fl.Parse(os.Args[1:])

@@ -151,6 +151,7 @@ Flag | Description | Default
 `-agent-auto-inject-annotation` | Annotation the webhook will look for in pods | `agent-auto-inject`
 `-target-vault-address` | Address of remote Vault API | `https://vault:8200`
 `-kubernetes-auth-path` | Path to Vault Kubernetes auth endpoint | `auth/kubernetes`
+`-vault-image-version` | Tag on the 'vault' Docker image to inject with the sidecar | `1.3.0`
 `-listen-addr` | The address to start the server | `:4443`
 
 ### ConfigMap
