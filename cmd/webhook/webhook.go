@@ -52,16 +52,6 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 		if !found {
 			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, corev1.EnvVar{Name: "VAULT_ADDR", Value: "http://127.0.0.1:8200"})
 		}
-		found = false
-		for _, e := range c.Env {
-			if e.Name == "VAULT_SKIP_VERIFY" {
-				e.Value = "true"
-				found = true
-			}
-		}
-		if !found {
-			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, corev1.EnvVar{Name: "VAULT_SKIP_VERIFY", Value: "true"})
-		}
 	}
 
 	pod.Spec.Volumes = append(pod.Spec.Volumes,
