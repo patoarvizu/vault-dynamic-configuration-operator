@@ -51,6 +51,10 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 		return false, nil
 	}
 
+	if pod.Annotations["vault-sidecar-injected"] == "true" {
+		return false, nil
+	}
+
 	if val, ok := pod.Annotations[fmt.Sprintf("%s/%s", cfg.annotationPrefix, agentAutoInjectAnnotation)]; !ok && val != sidecarInjectionMode && val != initContainerInjectionMode {
 		return false, nil
 	} else {
@@ -58,11 +62,11 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 	}
 
 	configMapName := cfg.defaultConfigMapName
-	if val, ok := pod.Annotations[fmt.Sprintf("%s/%s", cfg.annotationPrefix, configMapOverrideAnnotation)]; !ok && val != "" {
+	if val, ok := pod.Annotations[fmt.Sprintf("%s/%s", cfg.annotationPrefix, configMapOverrideAnnotation)]; ok && val != "" {
 		configMapName = val
 	}
 
-	logger.Infof("Injecting Vault sidecar into pod %s", pod.ObjectMeta.Name)
+	logger.Infof("Injecting Vault sidecar into pod with service account %s", pod.Spec.ServiceAccountName)
 	for i, c := range pod.Spec.Containers {
 		if injectionMode == initContainerInjectionMode {
 			pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, corev1.VolumeMount{
@@ -178,11 +182,6 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 				},
 			},
 		})
-
-		if pod.Annotations == nil {
-			pod.Annotations = make(map[string]string)
-		}
-		pod.Annotations["vault-sidecar-injected"] = "true"
 	} else if injectionMode == initContainerInjectionMode {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 			Name:  "vault-agent",
@@ -213,6 +212,11 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 			},
 		})
 	}
+
+	if pod.Annotations == nil {
+		pod.Annotations = make(map[string]string)
+	}
+	pod.Annotations["vault-sidecar-injected"] = "true"
 
 	return false, nil
 }
