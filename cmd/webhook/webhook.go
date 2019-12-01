@@ -15,15 +15,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	sidecarInjectionMode        = "sidecar"
+	initContainerInjectionMode  = "init-container"
+	agentAutoInjectAnnotation   = "agent-auto-inject"
+	configMapOverrideAnnotation = "agent-config-map"
+)
+
 type webhookCfg struct {
 	certFile             string
 	keyFile              string
 	addr                 string
 	annotationPrefix     string
-	autoInjectAnnotation string
 	targetVaultAddress   string
 	kubernetesAuthPath   string
 	vaultImageVersion    string
+	defaultConfigMapName string
 	cpuRequest           string
 	cpuLimit             string
 	memoryRequest        string
@@ -31,6 +38,7 @@ type webhookCfg struct {
 }
 
 var cfg = &webhookCfg{}
+var injectionMode string
 
 func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 	logger := &log.Std{}
@@ -43,20 +51,35 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 		return false, nil
 	}
 
-	if val, ok := pod.Annotations[fmt.Sprintf("%s/%s", cfg.annotationPrefix, cfg.autoInjectAnnotation)]; !ok || val != "true" {
+	if val, ok := pod.Annotations[fmt.Sprintf("%s/%s", cfg.annotationPrefix, agentAutoInjectAnnotation)]; !ok && val != sidecarInjectionMode && val != initContainerInjectionMode {
 		return false, nil
+	} else {
+		injectionMode = val
 	}
-	logger.Infof("Injecting Vault sidecar")
+
+	configMapName := cfg.defaultConfigMapName
+	if val, ok := pod.Annotations[fmt.Sprintf("%s/%s", cfg.annotationPrefix, configMapOverrideAnnotation)]; !ok && val != "" {
+		configMapName = val
+	}
+
+	logger.Infof("Injecting Vault sidecar into pod %s", pod.ObjectMeta.Name)
 	for i, c := range pod.Spec.Containers {
-		found := false
-		for _, e := range c.Env {
-			if e.Name == "VAULT_ADDR" {
-				e.Value = "http://localhost:8200"
-				found = true
+		if injectionMode == initContainerInjectionMode {
+			pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, corev1.VolumeMount{
+				Name:      "vault-token",
+				MountPath: "/vault-token",
+			})
+		} else {
+			found := false
+			for _, e := range c.Env {
+				if e.Name == "VAULT_ADDR" {
+					e.Value = "http://localhost:8200"
+					found = true
+				}
 			}
-		}
-		if !found {
-			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, corev1.EnvVar{Name: "VAULT_ADDR", Value: "http://127.0.0.1:8200"})
+			if !found {
+				pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, corev1.EnvVar{Name: "VAULT_ADDR", Value: "http://127.0.0.1:8200"})
+			}
 		}
 	}
 
@@ -74,12 +97,25 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: "vault-agent-config",
+						Name: configMapName,
 					},
 				},
 			},
 		},
 	)
+
+	if injectionMode == initContainerInjectionMode {
+		pod.Spec.Volumes = append(pod.Spec.Volumes,
+			corev1.Volume{
+				Name: "vault-token",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{
+						Medium: corev1.StorageMediumMemory,
+					},
+				},
+			},
+		)
+	}
 
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 		Name:  "config-template",
@@ -117,35 +153,66 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 		},
 	})
 
-	pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{
-		Name:  "vault-agent",
-		Image: "vault:" + cfg.vaultImageVersion,
-		Args: []string{
-			"agent",
-			"-config=/etc/vault/vault-agent-config.hcl",
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{
-				Name:      "vault-config",
-				MountPath: "/etc/vault",
+	if injectionMode == sidecarInjectionMode {
+		pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{
+			Name:  "vault-agent",
+			Image: "vault:" + cfg.vaultImageVersion,
+			Args: []string{
+				"agent",
+				"-config=/etc/vault/vault-agent-config.hcl",
 			},
-		},
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse(cfg.cpuLimit),
-				corev1.ResourceMemory: resource.MustParse(cfg.memoryLimit),
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "vault-config",
+					MountPath: "/etc/vault",
+				},
 			},
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse(cfg.cpuRequest),
-				corev1.ResourceMemory: resource.MustParse(cfg.memoryRequest),
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse(cfg.cpuLimit),
+					corev1.ResourceMemory: resource.MustParse(cfg.memoryLimit),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse(cfg.cpuRequest),
+					corev1.ResourceMemory: resource.MustParse(cfg.memoryRequest),
+				},
 			},
-		},
-	})
+		})
 
-	if pod.Annotations == nil {
-		pod.Annotations = make(map[string]string)
+		if pod.Annotations == nil {
+			pod.Annotations = make(map[string]string)
+		}
+		pod.Annotations["vault-sidecar-injected"] = "true"
+	} else if injectionMode == initContainerInjectionMode {
+		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
+			Name:  "vault-agent",
+			Image: "vault:" + cfg.vaultImageVersion,
+			Args: []string{
+				"agent",
+				"-config=/etc/vault/vault-agent-config.hcl",
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "vault-config",
+					MountPath: "/etc/vault",
+				},
+				{
+					Name:      "vault-token",
+					MountPath: "/vault-token",
+				},
+			},
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse(cfg.cpuLimit),
+					corev1.ResourceMemory: resource.MustParse(cfg.memoryLimit),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse(cfg.cpuRequest),
+					corev1.ResourceMemory: resource.MustParse(cfg.memoryRequest),
+				},
+			},
+		})
 	}
-	pod.Annotations["vault-sidecar-injected"] = "true"
 
 	return false, nil
 }
@@ -158,10 +225,10 @@ func main() {
 	fl.StringVar(&cfg.certFile, "tls-cert-file", "", "TLS certificate file")
 	fl.StringVar(&cfg.keyFile, "tls-key-file", "", "TLS key file")
 	fl.StringVar(&cfg.annotationPrefix, "annotation-prefix", "vault.patoarvizu.dev", "Prefix of the annotations the webhook will process")
-	fl.StringVar(&cfg.autoInjectAnnotation, "agent-auto-inject-annotation", "agent-auto-inject", "Annotation the webhook will look for in pods")
 	fl.StringVar(&cfg.targetVaultAddress, "target-vault-address", "https://vault:8200", "Address of remote Vault API")
 	fl.StringVar(&cfg.kubernetesAuthPath, "kubernetes-auth-path", "auth/kubernetes", "Path to Vault Kubernetes auth endpoint")
 	fl.StringVar(&cfg.vaultImageVersion, "vault-image-version", "1.3.0", "Tag on the 'vault' Docker image to inject with the sidecar")
+	fl.StringVar(&cfg.defaultConfigMapName, "default-config-map-name", "vault-agent-config", "The name of the ConfigMap to be used for the Vault agent configuration by default, unless overwritten by annotation")
 	fl.StringVar(&cfg.cpuRequest, "cpu-request", "50m", "The amount of CPU units to request for the Vault agent sidecar")
 	fl.StringVar(&cfg.cpuLimit, "cpu-limit", "100m", "The amount of CPU units to limit to on the Vault agent sidecar")
 	fl.StringVar(&cfg.memoryRequest, "memory-request", "128Mi", "The amount of memory units to request for the Vault agent sidecar")

@@ -148,10 +148,10 @@ Flag | Description | Default
 `-tls-cert-file` | TLS certificate file |
 `-tls-key-file` | TLS key file |
 `-annotation-prefix` | Prefix of the annotations the webhook will process | `vault.patoarvizu.dev`
-`-agent-auto-inject-annotation` | Annotation the webhook will look for in pods | `agent-auto-inject`
 `-target-vault-address` | Address of remote Vault API | `https://vault:8200`
 `-kubernetes-auth-path` | Path to Vault Kubernetes auth endpoint | `auth/kubernetes`
 `-vault-image-version` | Tag on the 'vault' Docker image to inject with the sidecar | `1.3.0`
+`-default-config-map-name` | The name of the ConfigMap to be used for the Vault agent configuration by default, unless overwritten by annotation | `vault-agent-config`
 `-cpu-request` | The amount of CPU units to request for the Vault agent sidecar") | `50m`
 `-cpu-limit` | The amount of CPU units to limit to on the Vault agent sidecar") | `100m`
 `-memory-request` | The amount of memory units to request for the Vault agent sidecar") | `128Mi`
@@ -160,7 +160,7 @@ Flag | Description | Default
 
 ### ConfigMap
 
-The webhook expects that a `ConfigMap` named `vault-agent-config` will exist in the same namespace as the target Pod (**NOT** in the same namespace as the webhook itself), that will contain only one key, called `vault-agent-config.hcl`, which will contain a [Go template](https://golang.org/pkg/text/template/) that will be rendered into the Vault agent configuration using [`gomplate`](https://github.com/hairyhenderson/gomplate), and will have the following environment variables available to be discovered with the `getenv` function:
+The webhook expects that a `ConfigMap` named `vault-agent-config` (or something else, if the `-default-config-map-name` was passed to the server) will exist in the same namespace as the target Pod (**NOT** in the same namespace as the webhook itself), that will contain only one key, called `vault-agent-config.hcl`, which will contain a [Go template](https://golang.org/pkg/text/template/) that will be rendered into the Vault agent configuration using [`gomplate`](https://github.com/hairyhenderson/gomplate), and will have the following environment variables available to be discovered with the `getenv` function:
 
 Environment variable | Value
 ---------------------|------
