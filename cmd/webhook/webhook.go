@@ -11,6 +11,7 @@ import (
 	"github.com/slok/kubewebhook/pkg/log"
 	mutatingwh "github.com/slok/kubewebhook/pkg/webhook/mutating"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -23,6 +24,10 @@ type webhookCfg struct {
 	targetVaultAddress   string
 	kubernetesAuthPath   string
 	vaultImageVersion    string
+	cpuRequest           string
+	cpuLimit             string
+	memoryRequest        string
+	memoryLimit          string
 }
 
 var cfg = &webhookCfg{}
@@ -125,6 +130,16 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 				MountPath: "/etc/vault",
 			},
 		},
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse(cfg.cpuLimit),
+				corev1.ResourceMemory: resource.MustParse(cfg.memoryLimit),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse(cfg.cpuRequest),
+				corev1.ResourceMemory: resource.MustParse(cfg.memoryRequest),
+			},
+		},
 	})
 
 	if pod.Annotations == nil {
@@ -147,6 +162,10 @@ func main() {
 	fl.StringVar(&cfg.targetVaultAddress, "target-vault-address", "https://vault:8200", "Address of remote Vault API")
 	fl.StringVar(&cfg.kubernetesAuthPath, "kubernetes-auth-path", "auth/kubernetes", "Path to Vault Kubernetes auth endpoint")
 	fl.StringVar(&cfg.vaultImageVersion, "vault-image-version", "1.3.0", "Tag on the 'vault' Docker image to inject with the sidecar")
+	fl.StringVar(&cfg.cpuRequest, "cpu-request", "50m", "The amount of CPU units to request for the Vault agent sidecar")
+	fl.StringVar(&cfg.cpuLimit, "cpu-limit", "100m", "The amount of CPU units to limit to on the Vault agent sidecar")
+	fl.StringVar(&cfg.memoryRequest, "memory-request", "128Mi", "The amount of memory units to request for the Vault agent sidecar")
+	fl.StringVar(&cfg.memoryLimit, "memory-limit", "256Mi", "The amount of memory units to limit to on the Vault agent sidecar")
 	fl.StringVar(&cfg.addr, "listen-addr", ":4443", "The address to start the server")
 
 	fl.Parse(os.Args[1:])

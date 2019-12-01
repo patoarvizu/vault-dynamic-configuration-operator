@@ -152,6 +152,10 @@ Flag | Description | Default
 `-target-vault-address` | Address of remote Vault API | `https://vault:8200`
 `-kubernetes-auth-path` | Path to Vault Kubernetes auth endpoint | `auth/kubernetes`
 `-vault-image-version` | Tag on the 'vault' Docker image to inject with the sidecar | `1.3.0`
+`-cpu-request` | The amount of CPU units to request for the Vault agent sidecar") | `50m`
+`-cpu-limit` | The amount of CPU units to limit to on the Vault agent sidecar") | `100m`
+`-memory-request` | The amount of memory units to request for the Vault agent sidecar") | `128Mi`
+`-memory-limit` | The amount of memory units to limit to on the Vault agent sidecar") | `256Mi`
 `-listen-addr` | The address to start the server | `:4443`
 
 ### ConfigMap
