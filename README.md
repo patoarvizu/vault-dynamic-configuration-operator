@@ -16,6 +16,7 @@
         - [Configuring the webhook](#configuring-the-webhook)
         - [Webhook command-line flags](#webhook-command-line-flags)
         - [ConfigMap](#configmap)
+    - [Init containers](#init-containers)
     - [For security nerds](#for-security-nerds)
         - [Docker images are signed and published to Docker Hub's Notary server](#docker-images-are-signed-and-published-to-docker-hubs-notary-server)
         - [Docker images are labeled with Git and GPG metadata](#docker-images-are-labeled-with-git-and-gpg-metadata)
@@ -71,7 +72,7 @@ Since the operator is **not** operating on the Vault cluster directly, it doesn'
 
 ## Vault agent sidecar auto-inject mutating webhook
 
-In addition to the operator image, this repository also builds a Docker image that can be deployed as a Kubernetes [Mutating Webhook](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/), that can modify Pods to automatically inject a Vault agent sidecar, including a rendered configuration template taken from a `ConfigMap` corresponding to the service's identity, as well as modify the environment variables on all containers in the Pod to inject a `VAULT_ADDR` environment variable that points to the sidecar agent.
+In addition to the operator image, this repository also builds a Docker image that can be deployed as a Kubernetes [Mutating Webhook](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/), that can modify Pods to automatically inject a Vault agent sidecar, including a rendered configuration template taken from a `ConfigMap` corresponding to the service's identity, as well as modify the environment variables on all containers in the Pod to inject a `VAULT_ADDR` environment variable that points to the sidecar agent. To do this, annotate your workload (`Deployment`, `StatefulSet`, `DaemonSet`, etc.) with `vault.patoarvizu.dev/agent-auto-inject: sidecar` to have the webhook modify the generated Pods as they are created.
 
 ### Running the webhook
 
@@ -167,6 +168,14 @@ Environment variable | Value
 `SERVICE` | The name of the `ServiceAccount` attached to the pod
 `TARGET_VAULT_ADDRESS` | The value of the `-target-vault-address` parameter (or its default)
 `KUBERNETES_AUTH_PATH` | The value of the `-kubernetes-auth-path` parameter (or its default)
+
+## Init containers
+
+Alternatively, the webhook can inject the Vault agent as an init container instead of a sidecar, which is useful for short-lived workloads, like `Job`s and `CronJob`s. In that case, the init container should use a configuration that has `exit_after_auth = true` so the init container exists after authenticating and doesn't remain long-lived. Doing so, would cause the container to never exit past the init container phase. The config file should also contain at least one [file sink](https://www.vaultproject.io/docs/agent/autoauth/sinks/file.html). The webhook will also modify the containers to mount an additional volume on `/vault-token/` that can be used as a file sink.
+
+To do this, annotate your workload with `vault.patoarvizu.dev/agent-auto-inject: init-container`.
+
+Usually, a given config file will only be suitable for either long-lived sidecars or short-lived init containers. If the default config map (`vault-agent-config` by default, or the overwrite if `-default-config-map-name` was provided) is not suitable for a specific application, it can be overwritten with the `vault.patoarvizu.dev/agent-config-map` annotation. If set, the value should be the name of a `ConfigMap` in the same namespace that that the webhook should use to inject, instead of the default one.
 
 ## For security nerds
 
