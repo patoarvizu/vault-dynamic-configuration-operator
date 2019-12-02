@@ -171,7 +171,7 @@ Environment variable | Value
 
 ## Init containers
 
-Alternatively, the webhook can inject the Vault agent as an init container instead of a sidecar, which is useful for short-lived workloads, like `Job`s and `CronJob`s. In that case, the init container should use a configuration that has `exit_after_auth = true` so the init container exists after authenticating and doesn't remain long-lived. Doing so, would cause the container to never exit past the init container phase. The config file should also contain at least one [file sink](https://www.vaultproject.io/docs/agent/autoauth/sinks/file.html). The webhook will also modify the containers to mount an additional volume on `/vault-token/` that can be used as a file sink.
+Alternatively, the webhook can inject the Vault agent as an init container instead of a sidecar, which is useful for short-lived workloads, like `Job`s and `CronJob`s. In that case, the init container should use a configuration that has `exit_after_auth = true` so the init container exists after authenticating and doesn't remain long-lived. Doing so, would cause the container to never exit past the init container phase. The config file should also contain at least one [file sink](https://www.vaultproject.io/docs/agent/autoauth/sinks/file.html). The webhook will also modify the containers to mount an additional volume on `/vault-agent` that can be used as a file sink.
 
 To do this, annotate your workload with `vault.patoarvizu.dev/agent-auto-inject: init-container`.
 

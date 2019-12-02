@@ -20,6 +20,8 @@ const (
 	initContainerInjectionMode  = "init-container"
 	agentAutoInjectAnnotation   = "agent-auto-inject"
 	configMapOverrideAnnotation = "agent-config-map"
+	vaultAgentVolumeMountName   = "vault-agent"
+	vaultAgentVolumeMountPath   = "/vault-agent"
 )
 
 type webhookCfg struct {
@@ -70,8 +72,8 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 	for i, c := range pod.Spec.Containers {
 		if injectionMode == initContainerInjectionMode {
 			pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, corev1.VolumeMount{
-				Name:      "vault-token",
-				MountPath: "/vault-token",
+				Name:      vaultAgentVolumeMountName,
+				MountPath: vaultAgentVolumeMountPath,
 			})
 		} else {
 			found := false
@@ -111,7 +113,7 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 	if injectionMode == initContainerInjectionMode {
 		pod.Spec.Volumes = append(pod.Spec.Volumes,
 			corev1.Volume{
-				Name: "vault-token",
+				Name: vaultAgentVolumeMountName,
 				VolumeSource: corev1.VolumeSource{
 					EmptyDir: &corev1.EmptyDirVolumeSource{
 						Medium: corev1.StorageMediumMemory,
@@ -196,8 +198,8 @@ func injectVaultSidecar(_ context.Context, obj metav1.Object) (bool, error) {
 					MountPath: "/etc/vault",
 				},
 				{
-					Name:      "vault-token",
-					MountPath: "/vault-token",
+					Name:      vaultAgentVolumeMountName,
+					MountPath: vaultAgentVolumeMountPath,
 				},
 			},
 			Resources: corev1.ResourceRequirements{
