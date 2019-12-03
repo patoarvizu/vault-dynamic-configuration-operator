@@ -74,7 +74,7 @@ jobs:
             echo $WEBHOOK_ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-agent-auto-inject-webhook-circleci.key
             export NOTARY_DELEGATION_PASSPHRASE=$WEBHOOK_NOTARY_ROLE_PASSPHRASE
             notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-agent-auto-inject-webhook-circleci.key --role vault-agent-auto-inject-webhook-circleci
-            export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$WEBHOOK_NOTARY_DELEGATION_PASSPHRASE
+            export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
             go mod vendor
             docker build -f build/Dockerfile.webhook -t patoarvizu/vault-agent-auto-inject-webhook:$CIRCLE_SHA1 .
             export DOCKER_CONTENT_TRUST=1
