@@ -71,19 +71,19 @@ jobs:
           name: Build webhook
           command: |
             docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
-            echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
-            export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
-            notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
-            export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
+            echo $WEBHOOK_ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-agent-auto-inject-webhook-circleci.key
+            export NOTARY_DELEGATION_PASSPHRASE=$WEBHOOK_NOTARY_ROLE_PASSPHRASE
+            notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-agent-auto-inject-webhook-circleci.key --role vault-agent-auto-inject-webhook-circleci
+            export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$WEBHOOK_NOTARY_DELEGATION_PASSPHRASE
             go mod vendor
-            docker build -f build/Dockerfile.webhook -t patoarvizu/vault-dynamic-configuration-operator:webhook-$CIRCLE_SHA1 .
+            docker build -f build/Dockerfile.webhook -t patoarvizu/vault-agent-auto-inject-webhook:$CIRCLE_SHA1 .
             export DOCKER_CONTENT_TRUST=1
             VERSION=${CIRCLE_TAG:-latest}
-            docker tag patoarvizu/vault-dynamic-configuration-operator:webhook-$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:webhook-latest
-            docker tag patoarvizu/vault-dynamic-configuration-operator:webhook-$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:webhook-$VERSION
-            docker push patoarvizu/vault-dynamic-configuration-operator:webhook-$CIRCLE_SHA1
-            docker push patoarvizu/vault-dynamic-configuration-operator:webhook-$VERSION
-            docker push patoarvizu/vault-dynamic-configuration-operator:webhook-latest
+            docker tag patoarvizu/vault-agent-auto-inject-webhook:$CIRCLE_SHA1 patoarvizu/vault-agent-auto-inject-webhook:latest
+            docker tag patoarvizu/vault-agent-auto-inject-webhook:$CIRCLE_SHA1 patoarvizu/vault-agent-auto-inject-webhook:$VERSION
+            docker push patoarvizu/vault-agent-auto-inject-webhook:$CIRCLE_SHA1
+            docker push patoarvizu/vault-agent-auto-inject-webhook:$VERSION
+            docker push patoarvizu/vault-agent-auto-inject-webhook:latest
       - save_cache:
           key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
           paths:
