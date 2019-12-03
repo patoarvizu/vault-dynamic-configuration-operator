@@ -84,8 +84,8 @@ Your `Deployment` and `Service` will look like those of any other service you ru
 kind: Deployment
 ...
       containers:
-        - name: vdc-webhook
-          image: patoarvizu/vault-dynamic-configuration-operator:auto-inject-latest
+        - name: vault-agent-auto-inject-webhook
+          image: patoarvizu/vault-agent-auto-inject-webhook:latest
           command:
           - /vault-dynamic-configuration-webhook
           - -tls-cert-file
@@ -101,10 +101,10 @@ kind: Deployment
       volumes:
       - name: tls
         secret:
-          secretName: vdc-webhook
+          secretName: vault-agent-auto-inject-webhook
 ```
 
-This assumes that there is a `Secret` called `vdc-webhook` that contains the `tls.crt` and `tls.key` files that can be mounted on the container and passed to the webhook. The [`cert-manager`](https://github.com/jetstack/cert-manager/) project makes it really easy to generate certificates as Kubernetes `Secret`s to be used for cases like this.
+This assumes that there is a `Secret` called `vault-agent-auto-inject-webhook` that contains the `tls.crt` and `tls.key` files that can be mounted on the container and passed to the webhook. The [`cert-manager`](https://github.com/jetstack/cert-manager/) project makes it really easy to generate certificates as Kubernetes `Secret`s to be used for cases like this.
 
 ### Configuring the webhook
 
@@ -114,9 +114,9 @@ The other important piece is deploying the `MutatingWebhookConfiguration` itself
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: vdc-webhook
+  name: vault-agent-auto-inject-webhook
   labels:
-    app: vdc-webhook
+    app: vault-agent-auto-inject-webhook
 webhooks:
   - name: vault.patoarvizu.dev
     rules:
@@ -133,7 +133,7 @@ webhooks:
     clientConfig:
       caBundle: ${CA_BUNDLE}
       service:
-        name: vdc-webhook
+        name: vault-agent-auto-inject-webhook
         namespace: default
         path: /
 ```
