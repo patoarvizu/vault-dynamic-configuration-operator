@@ -4,6 +4,7 @@ require (
 	github.com/banzaicloud/bank-vaults v0.0.0-20190910141510-8f704ca1763e
 	github.com/kr/pty v1.1.3 // indirect
 	github.com/operator-framework/operator-sdk v0.11.1-0.20191025223530-668fffea7548
+	github.com/slok/kubewebhook v0.3.0
 	github.com/spf13/pflag v1.0.3
 	k8s.io/api v0.0.0-20190918155943-95b840bb6a1f
 	k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655
