@@ -20,6 +20,9 @@ jobs:
       - restore_cache:
           keys:
             - vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
+      - snyk/scan:
+          fail-on-issues: true
+          project: patoarvizu/vault-dynamic-configuration-operator-golang
       - run:
           name: Install golang
           command: |
@@ -36,11 +39,11 @@ jobs:
       - run:
           name: Build image
           command: |
-            operator-sdk build patoarvizu/kms-vault-operator:latest
+            operator-sdk build patoarvizu/vault-dynamic-configuration-operator:latest
       - snyk/scan:
           docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
           fail-on-issues: true
-          project: patoarvizu/vault-dynamic-configuration-operator
+          project: patoarvizu/vault-dynamic-configuration-operator-docker
           severity-threshold: low
       - run:
           name: Install notary
