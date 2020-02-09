@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  snyk: snyk/snyk@0.0.8
+
 jobs:
   build:
     machine:
@@ -72,6 +75,7 @@ workflows:
   build-operator:
     jobs:
       - build:
+          context: authentication-tokens
           filters:
             tags:
               only: /^v\d+\.\d+.\d+$/
