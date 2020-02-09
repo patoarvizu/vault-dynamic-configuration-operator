@@ -31,13 +31,22 @@ jobs:
             curl -L https://github.com/operator-framework/operator-sdk/releases/download/v${OPERATOR_SDK_VERSION}/operator-sdk-v${OPERATOR_SDK_VERSION}-x86_64-linux-gnu -o ${HOME}/go/bin/operator-sdk
             chmod +x ${HOME}/go/bin/operator-sdk
       - run:
+          name: Build image
+          command: |
+            operator-sdk build patoarvizu/kms-vault-operator:latest
+      - snyk/scan:
+          docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
+          fail-on-issues: true
+          project: patoarvizu/vault-dynamic-configuration-operator
+          severity-threshold: low
+      - run:
           name: Install notary
           command: |
             curl -L https://github.com/theupdateframework/notary/releases/download/v${NOTARY_VERSION}/notary-Linux-amd64 -o notary
             chmod +x notary
             sudo mv notary /usr/local/bin
       - run:
-          name: Build container
+          name: Build operator
           command: |
             docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
             echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
