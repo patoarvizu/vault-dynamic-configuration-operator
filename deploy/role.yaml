@@ -12,3 +12,12 @@ rules:
   - list
   - get
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - create
+  - list
+  - watch
