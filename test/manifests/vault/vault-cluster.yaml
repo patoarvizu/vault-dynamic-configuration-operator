@@ -34,4 +34,14 @@ spec:
   externalConfig:
     policies: []
     auth:
-      - type: kubernetes
+    - type: kubernetes
+    secrets:
+    - type: database
+      configuration:
+        config:
+        - name: mysql
+          plugin_name: "mysql-database-plugin"
+          connection_url: "{{username}}:{{password}}@tcp(mysql:3306)/"
+          allowed_roles: []
+          username: "admin"
+          password: "admin"

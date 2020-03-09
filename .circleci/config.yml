@@ -69,9 +69,9 @@ jobs:
             kubectl apply -f test/manifests/vault/vault-crd.yaml
             kubectl apply -f test/manifests/vault/vault-cluster.yaml
             kubectl apply -f deploy/
-            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestSingleNamespaceServiceAccountAnnotation'
+            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestSingleNamespace'
             kubectl -n vault patch deployment vault-dynamic-configuration-operator --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/command/-", "value":"--bound-roles-to-all-namespaces"}]'
-            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestAllNamespacesServiceAccountAnnotation'
+            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestAllNamespaces'
       - run:
           name: Install notary
           command: |
