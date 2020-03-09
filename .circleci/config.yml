@@ -71,9 +71,6 @@ jobs:
               sleep 3
             done
             kubectl apply -f test/manifests/vault/vault-cluster.yaml
-            while [ "$(kubectl -n vault get statefulset vault -o jsonpath={.status.readyReplicas})" != "1" ]; do
-              sleep 3
-            done
             kubectl apply -f deploy/
             operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestSingleNamespaceServiceAccountAnnotation'
             kubectl -n vault patch deployment vault-dynamic-configuration-operator --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/command/-", "value":"--bound-roles-to-all-namespaces"}]'
@@ -100,7 +97,7 @@ jobs:
             docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:$VERSION
             docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1
             docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION
-            docker push patoarvizu/vault-dynamic-configuration-operator:lates
+            docker push patoarvizu/vault-dynamic-configuration-operator:latest
 
 workflows:
   version: 2
