@@ -6,12 +6,14 @@ orbs:
 jobs:
   build:
     machine:
-        enabled: true
-        image: circleci/classic:201808-01
+      enabled: true
+      image: circleci/classic:201808-01
     environment:
       GOLANG_VERSION: 1.11.6
       OPERATOR_SDK_VERSION: 0.11.0
       NOTARY_VERSION: 0.6.1
+      KUBECTL_VERSION: 1.12.0
+      K3D_VERSION: 1.3.1
       GOPATH: /home/circleci/go
       GO111MODULE: "on"
     working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
@@ -37,11 +39,45 @@ jobs:
           name: Build image
           command: |
             operator-sdk build patoarvizu/vault-dynamic-configuration-operator:latest
-      - snyk/scan:
-          docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
-          fail-on-issues: true
-          project: patoarvizu/vault-dynamic-configuration-operator
-          severity-threshold: low
+      - save_cache:
+          key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
+          paths:
+            - /home/circleci/go/pkg/mod/cache
+      # - snyk/scan:
+      #     docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
+      #     fail-on-issues: true
+      #     project: patoarvizu/vault-dynamic-configuration-operator
+      #     severity-threshold: low
+      - run:
+          name: Install kubectl
+          command: |
+            curl -Lo kubectl "https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+            chmod +x kubectl
+            sudo mv kubectl /usr/local/bin/
+            mkdir -p "${HOME}/.kube"
+            touch "${HOME}/.kube/config"
+      - run:
+          name: Install k3d
+          command: |
+            wget -q -O - https://raw.githubusercontent.com/rancher/k3d/v${K3D_VERSION}/install.sh | bash
+      - run:
+          name: Run all tests
+          command: |
+            k3d create --image rancher/k3s:v1.0.0 -t=0
+            export KUBECONFIG="$(k3d get-kubeconfig)"
+            k3d import-images patoarvizu/vault-dynamic-configuration-operator:latest
+            kubectl apply -f test/manifests/vault/vault-operator.yaml
+            while [ "$(kubectl -n vault get deployment vault-operator -o jsonpath={.status.availableReplicas})" != "1" ]; do
+              sleep 3
+            done
+            kubectl apply -f test/manifests/vault/vault-cluster.yaml
+            while [ "$(kubectl -n vault get statefulset vault -o jsonpath={.status.readyReplicas})" != "1" ]; do
+              sleep 3
+            done
+            kubectl apply -f deploy/
+            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestSingleNamespaceServiceAccountAnnotation'
+            kubectl -n vault patch deployment vault-dynamic-configuration-operator --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/command/-", "value":"--bound-roles-to-all-namespaces"}]'
+            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestAllNamespacesServiceAccountAnnotation'
       - run:
           name: Install notary
           command: |
@@ -64,11 +100,7 @@ jobs:
             docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:$VERSION
             docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1
             docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION
-            docker push patoarvizu/vault-dynamic-configuration-operator:latest
-      - save_cache:
-          key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
-          paths:
-            - /home/circleci/go/pkg/mod/cache
+            docker push patoarvizu/vault-dynamic-configuration-operator:lates
 
 workflows:
   version: 2
