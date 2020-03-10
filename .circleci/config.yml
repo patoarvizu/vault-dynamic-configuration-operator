@@ -43,11 +43,11 @@ jobs:
           key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
           paths:
             - /home/circleci/go/pkg/mod/cache
-      # - snyk/scan:
-      #     docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
-      #     fail-on-issues: true
-      #     project: patoarvizu/vault-dynamic-configuration-operator
-      #     severity-threshold: low
+      - snyk/scan:
+          docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
+          fail-on-issues: true
+          project: patoarvizu/vault-dynamic-configuration-operator
+          severity-threshold: low
       - run:
           name: Install kubectl
           command: |
