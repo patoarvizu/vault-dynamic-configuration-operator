@@ -58,18 +58,8 @@ func testVaultRole(name string, namespace string, t *testing.T) {
 		if wErr != nil {
 			return false, nil
 		}
-		kubernetesAuthIndex, wErr := bvConfig.GetKubernetesAuthIndex()
-		if wErr != nil {
-			return false, nil
-		}
-		if bvConfig.Auth[kubernetesAuthIndex].Roles == nil {
-			return false, nil
-		}
 		role, wErr := bvConfig.GetRole(name)
 		if wErr != nil {
-			return false, nil
-		}
-		if role.Name != name {
 			return false, nil
 		}
 		if role.BoundServiceAccountNames != name || role.BoundServiceAccountNamespaces != namespace || role.TokenTtl != "5m" {
@@ -80,9 +70,6 @@ func testVaultRole(name string, namespace string, t *testing.T) {
 		}
 		policy, wErr := bvConfig.GetPolicy(name)
 		if wErr != nil {
-			return false, nil
-		}
-		if policy.Name != name {
 			return false, nil
 		}
 		if policy.Rules != fmt.Sprintf("path \"secret/%s\" {\n  capabilities = [\"read\"]\n}\n", name) {
@@ -108,23 +95,14 @@ func testVaultDBRole(name string, t *testing.T) {
 		if err != nil {
 			return false, nil
 		}
-		dbSecretsIndex, wErr := bvConfig.GetDBSecretsIndex()
-		if wErr != nil {
-			return false, nil
-		}
-		if bvConfig.Secrets[dbSecretsIndex].Configuration.Roles == nil {
-			return false, nil
-		}
 		role, wErr := bvConfig.GetDBRole(name)
 		if wErr != nil {
-			return false, nil
-		}
-		if role.Name != name {
 			return false, nil
 		}
 		if role.DbName != "mysql" || role.DefaultTtl != "1h" || role.MaxTtl != "24h" {
 			t.Errorf("Dynamic DB credentials for role '%s' aren't configured correctly", name)
 		}
+		dbSecretsIndex, _ := bvConfig.GetDBSecretsIndex()
 		if bvConfig.Secrets[dbSecretsIndex].Configuration.Config[0].AllowedRoles[0] != name {
 			t.Errorf("Role '%s' configured for dynamic DB credentials is missing from allowed_roles", name)
 		}
