@@ -1,10 +1,11 @@
-package serviceaccount
+package vdc
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"text/template"
 
 	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
@@ -98,33 +99,33 @@ type ReconcileServiceAccount struct {
 	scheme *runtime.Scheme
 }
 
-type bankVaultsConfig struct {
-	Auth     []auth   `json:"auth"`
-	Policies []policy `json:"policies"`
-	Secrets  []secret `json:"secrets,omitempty"`
+type BankVaultsConfig struct {
+	Auth     []Auth   `json:"auth"`
+	Policies []Policy `json:"policies"`
+	Secrets  []Secret `json:"secrets,omitempty"`
 }
 
-type auth struct {
-	Roles []role `json:"roles"`
+type Auth struct {
+	Roles []Role `json:"roles"`
 	Type  string `json:"type"`
 }
 
-type policy struct {
+type Policy struct {
 	Name  string `json:"name"`
 	Rules string `json:"rules"`
 }
 
-type secret struct {
+type Secret struct {
 	Type          string          `json:"type"`
-	Configuration dbConfiguration `json:"configuration"`
+	Configuration DBConfiguration `json:"configuration"`
 }
 
-type dbConfiguration struct {
-	Config []dbConfig `json:"config"`
-	Roles  []dbRole   `json:"roles"`
+type DBConfiguration struct {
+	Config []DBConfig `json:"config"`
+	Roles  []DBRole   `json:"roles"`
 }
 
-type dbConfig struct {
+type DBConfig struct {
 	Name                  string   `json:"name"`
 	PluginName            string   `json:"plugin_name"`
 	MaxOpenConnections    int      `json:"max_open_connections,omitempty"`
@@ -136,7 +137,7 @@ type dbConfig struct {
 	Password              string   `json:"password"`
 }
 
-type dbRole struct {
+type DBRole struct {
 	Name               string   `json:"name"`
 	DbName             string   `json:"db_name"`
 	CreationStatements []string `json:"creation_statements"`
@@ -144,7 +145,7 @@ type dbRole struct {
 	MaxTtl             string   `json:"max_ttl,omitempty"`
 }
 
-type role struct {
+type Role struct {
 	BoundServiceAccountNames      string   `json:"bound_service_account_names"`
 	BoundServiceAccountNamespaces string   `json:"bound_service_account_namespaces"`
 	Name                          string   `json:"name"`
@@ -189,7 +190,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		reqLogger.Error(err, "Error getting Vault configuration")
 		return reconcile.Result{}, err
 	}
-	var bvConfig bankVaultsConfig
+	var bvConfig BankVaultsConfig
 	jsonData, _ := json.Marshal(vaultConfig.Spec.ExternalConfig)
 	err = json.Unmarshal(jsonData, &bvConfig)
 	if err != nil {
@@ -213,13 +214,13 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		Name:      instance.ObjectMeta.Name,
 		Namespace: instance.ObjectMeta.Namespace,
 	})
-	kubernetesAuthIndex, err := getKubernetesAuthIndex(bvConfig)
+	kubernetesAuthIndex, err := bvConfig.GetKubernetesAuthIndex()
 	if err != nil {
 		reqLogger.Error(err, "Can't find kubernetes auth configuration")
 		return reconcile.Result{}, err
 	}
 	if !policyExists(bvConfig.Policies, instance.ObjectMeta.Name) {
-		newPolicy := &policy{
+		newPolicy := &Policy{
 			Name:  instance.ObjectMeta.Name,
 			Rules: parsedBuffer.String(),
 		}
@@ -229,7 +230,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
 	}
 	if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
-		newRole := &role{
+		newRole := &Role{
 			BoundServiceAccountNames: instance.ObjectMeta.Name,
 			BoundServiceAccountNamespaces: func(namespace string) string {
 				if BoundRolesToAllNamespaces {
@@ -284,14 +285,14 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		dbMaxTtl = val
 	}
 
-	dbSecretsIndex, err := getDBSecretsIndex(bvConfig)
+	dbSecretsIndex, err := bvConfig.GetDBSecretsIndex()
 	if err != nil {
 		reqLogger.Error(err, "Can't find database secrets configuration")
 		return reconcile.Result{}, err
 	}
 
 	if !dbRoleExists(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, instance.ObjectMeta.Name) {
-		newDbRole := &dbRole{
+		newDbRole := &DBRole{
 			Name:               instance.ObjectMeta.Name,
 			DbName:             targetDb,
 			CreationStatements: []string{creationStatement},
@@ -330,7 +331,7 @@ func getBoundServiceAccountNamespace(namespace string) string {
 	}
 }
 
-func getDBSecretsIndex(bvConfig bankVaultsConfig) (int, error) {
+func (bvConfig BankVaultsConfig) GetDBSecretsIndex() (int, error) {
 	for i, s := range bvConfig.Secrets {
 		if s.Type == "database" {
 			return i, nil
@@ -339,7 +340,7 @@ func getDBSecretsIndex(bvConfig bankVaultsConfig) (int, error) {
 	return -1, errors.New("Database secrets configuration not found")
 }
 
-func getDbConfigIndex(dbSecret secret, targetDb string) (int, error) {
+func getDbConfigIndex(dbSecret Secret, targetDb string) (int, error) {
 	for i, c := range dbSecret.Configuration.Config {
 		if c.Name == targetDb {
 			return i, nil
@@ -348,7 +349,7 @@ func getDbConfigIndex(dbSecret secret, targetDb string) (int, error) {
 	return -1, errors.New("Database configuration not found")
 }
 
-func getKubernetesAuthIndex(bvConfig bankVaultsConfig) (int, error) {
+func (bvConfig BankVaultsConfig) GetKubernetesAuthIndex() (int, error) {
 	for i, a := range bvConfig.Auth {
 		if a.Type == "kubernetes" {
 			return i, nil
@@ -357,7 +358,42 @@ func getKubernetesAuthIndex(bvConfig bankVaultsConfig) (int, error) {
 	return -1, errors.New("Kubernetes authentication configuration not found")
 }
 
-func getExistingPolicyIndex(policies []policy, name string) int {
+func (bvConfig BankVaultsConfig) GetRole(name string) (Role, error) {
+	kubernetesAuthIndex, err := bvConfig.GetKubernetesAuthIndex()
+	if err != nil {
+		return Role{}, err
+	}
+	for _, r := range bvConfig.Auth[kubernetesAuthIndex].Roles {
+		if r.Name == name {
+			return r, nil
+		}
+	}
+	return Role{}, errors.New(fmt.Sprintf("Role %s not found", name))
+}
+
+func (bvConfig BankVaultsConfig) GetDBRole(name string) (DBRole, error) {
+	dbSecretsIndex, err := bvConfig.GetDBSecretsIndex()
+	if err != nil {
+		return DBRole{}, err
+	}
+	for _, r := range bvConfig.Secrets[dbSecretsIndex].Configuration.Roles {
+		if r.Name == name {
+			return r, nil
+		}
+	}
+	return DBRole{}, errors.New(fmt.Sprintf("Role %s not found", name))
+}
+
+func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
+	for _, p := range bvConfig.Policies {
+		if p.Name == name {
+			return p, nil
+		}
+	}
+	return Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
+}
+
+func getExistingPolicyIndex(policies []Policy, name string) int {
 	for i, p := range policies {
 		if p.Name == name {
 			return i
@@ -366,7 +402,7 @@ func getExistingPolicyIndex(policies []policy, name string) int {
 	return -1
 }
 
-func roleExists(roles []role, name string) bool {
+func roleExists(roles []Role, name string) bool {
 	for _, r := range roles {
 		if r.Name == name {
 			return true
@@ -375,7 +411,7 @@ func roleExists(roles []role, name string) bool {
 	return false
 }
 
-func dbRoleExists(dbRoles []dbRole, name string) bool {
+func dbRoleExists(dbRoles []DBRole, name string) bool {
 	for _, r := range dbRoles {
 		if r.Name == name {
 			return true
@@ -384,7 +420,7 @@ func dbRoleExists(dbRoles []dbRole, name string) bool {
 	return false
 }
 
-func policyExists(policies []policy, name string) bool {
+func policyExists(policies []Policy, name string) bool {
 	for _, r := range policies {
 		if r.Name == name {
 			return true

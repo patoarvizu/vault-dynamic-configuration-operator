@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/test"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
+	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/controller/vdc"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -45,44 +47,45 @@ func createServiceAccount(name string, extraAnnotations map[string]string, ctx *
 
 func testVaultRole(name string, namespace string, t *testing.T) {
 	vaultCR := &bankvaultsv1alpha1.Vault{}
+	bvConfig := vdc.BankVaultsConfig{}
 	err := wait.Poll(time.Second*2, time.Second*60, func() (done bool, err error) {
 		framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: "vault", Namespace: "vault"}, vaultCR)
-		auth := vaultCR.Spec.ExternalConfig["auth"]
-		auth0 := auth.([]interface{})[0]
-		roles := auth0.(map[string]interface{})["roles"]
-		if roles == nil {
+		jsonData, wErr := json.Marshal(vaultCR.Spec.ExternalConfig)
+		if wErr != nil {
 			return false, nil
 		}
-		var role map[string]interface{}
-		for _, r := range roles.([]interface{}) {
-			rn := r.(map[string]interface{})
-			if rn["name"] != name {
-				continue
-			}
-			role = rn
-		}
-		if role["name"] != name {
+		wErr = json.Unmarshal(jsonData, &bvConfig)
+		if wErr != nil {
 			return false, nil
 		}
-		if role["bound_service_account_names"] != name || role["bound_service_account_namespaces"] != namespace || role["token_ttl"] != "5m" {
+		kubernetesAuthIndex, wErr := bvConfig.GetKubernetesAuthIndex()
+		if wErr != nil {
+			return false, nil
+		}
+		if bvConfig.Auth[kubernetesAuthIndex].Roles == nil {
+			return false, nil
+		}
+		role, wErr := bvConfig.GetRole(name)
+		if wErr != nil {
+			return false, nil
+		}
+		if role.Name != name {
+			return false, nil
+		}
+		if role.BoundServiceAccountNames != name || role.BoundServiceAccountNamespaces != namespace || role.TokenTtl != "5m" {
 			t.Errorf("Test role '%s' is not configured correctly", name)
 		}
-		if role["token_policies"].([]interface{})[0].(string) != name {
+		if role.TokenPolicies[0] != name {
 			t.Errorf("Test role '%s' policies are not configured correctly", name)
 		}
-		policies := vaultCR.Spec.ExternalConfig["policies"].([]interface{})
-		var policy map[string]interface{}
-		for _, p := range policies {
-			pl := p.(map[string]interface{})
-			if pl["name"] != name {
-				continue
-			}
-			policy = pl
-		}
-		if policy["name"] != name {
+		policy, wErr := bvConfig.GetPolicy(name)
+		if wErr != nil {
 			return false, nil
 		}
-		if policy["rules"] != fmt.Sprintf("path \"secret/%s\" {\n  capabilities = [\"read\"]\n}\n", name) {
+		if policy.Name != name {
+			return false, nil
+		}
+		if policy.Rules != fmt.Sprintf("path \"secret/%s\" {\n  capabilities = [\"read\"]\n}\n", name) {
 			t.Errorf("Test role '%s' policy rules are not configured correctly", name)
 		}
 		return true, nil
@@ -94,33 +97,35 @@ func testVaultRole(name string, namespace string, t *testing.T) {
 
 func testVaultDBRole(name string, t *testing.T) {
 	vaultCR := &bankvaultsv1alpha1.Vault{}
+	bvConfig := vdc.BankVaultsConfig{}
 	err := wait.Poll(time.Second*2, time.Second*60, func() (done bool, err error) {
 		framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: "vault", Namespace: "vault"}, vaultCR)
-		secrets := vaultCR.Spec.ExternalConfig["secrets"]
-		secrets0 := secrets.([]interface{})[0]
-		configuration := secrets0.(map[string]interface{})["configuration"]
-		roles := configuration.(map[string]interface{})["roles"]
-		if roles == nil {
+		jsonData, wErr := json.Marshal(vaultCR.Spec.ExternalConfig)
+		if wErr != nil {
 			return false, nil
 		}
-		var role map[string]interface{}
-		for _, r := range roles.([]interface{}) {
-			rn := r.(map[string]interface{})
-			if rn["name"] != name {
-				continue
-			}
-			role = rn
-		}
-		if role["name"] != name {
+		wErr = json.Unmarshal(jsonData, &bvConfig)
+		if err != nil {
 			return false, nil
 		}
-		if role["db_name"] != "mysql" || role["default_ttl"] != "1h" || role["max_ttl"] != "24h" {
+		dbSecretsIndex, wErr := bvConfig.GetDBSecretsIndex()
+		if wErr != nil {
+			return false, nil
+		}
+		if bvConfig.Secrets[dbSecretsIndex].Configuration.Roles == nil {
+			return false, nil
+		}
+		role, wErr := bvConfig.GetDBRole(name)
+		if wErr != nil {
+			return false, nil
+		}
+		if role.Name != name {
+			return false, nil
+		}
+		if role.DbName != "mysql" || role.DefaultTtl != "1h" || role.MaxTtl != "24h" {
 			t.Errorf("Dynamic DB credentials for role '%s' aren't configured correctly", name)
 		}
-		config := configuration.(map[string]interface{})["config"]
-		config0 := config.([]interface{})[0]
-		allowedRoles := config0.(map[string]interface{})["allowed_roles"]
-		if allowedRoles.([]interface{})[0] != name {
+		if bvConfig.Secrets[dbSecretsIndex].Configuration.Config[0].AllowedRoles[0] != name {
 			t.Errorf("Role '%s' configured for dynamic DB credentials is missing from allowed_roles", name)
 		}
 		return true, nil

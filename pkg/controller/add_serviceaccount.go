@@ -1,10 +1,10 @@
 package controller
 
 import (
-	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/controller/serviceaccount"
+	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/controller/vdc"
 )
 
 func init() {
 	// AddToManagerFuncs is a list of functions to create controllers and add them to a manager.
-	AddToManagerFuncs = append(AddToManagerFuncs, serviceaccount.Add)
+	AddToManagerFuncs = append(AddToManagerFuncs, vdc.Add)
 }
