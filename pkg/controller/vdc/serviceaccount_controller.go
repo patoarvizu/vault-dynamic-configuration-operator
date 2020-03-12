@@ -323,14 +323,6 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, nil
 }
 
-func getBoundServiceAccountNamespace(namespace string) string {
-	if BoundRolesToAllNamespaces {
-		return "*"
-	} else {
-		return namespace
-	}
-}
-
 func (bvConfig BankVaultsConfig) GetDBSecretsIndex() (int, error) {
 	for i, s := range bvConfig.Secrets {
 		if s.Type == "database" {
@@ -338,15 +330,6 @@ func (bvConfig BankVaultsConfig) GetDBSecretsIndex() (int, error) {
 		}
 	}
 	return -1, errors.New("Database secrets configuration not found")
-}
-
-func getDbConfigIndex(dbSecret Secret, targetDb string) (int, error) {
-	for i, c := range dbSecret.Configuration.Config {
-		if c.Name == targetDb {
-			return i, nil
-		}
-	}
-	return -1, errors.New("Database configuration not found")
 }
 
 func (bvConfig BankVaultsConfig) GetKubernetesAuthIndex() (int, error) {
@@ -391,6 +374,23 @@ func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
 		}
 	}
 	return Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
+}
+
+func getBoundServiceAccountNamespace(namespace string) string {
+	if BoundRolesToAllNamespaces {
+		return "*"
+	} else {
+		return namespace
+	}
+}
+
+func getDbConfigIndex(dbSecret Secret, targetDb string) (int, error) {
+	for i, c := range dbSecret.Configuration.Config {
+		if c.Name == targetDb {
+			return i, nil
+		}
+	}
+	return -1, errors.New("Database configuration not found")
 }
 
 func getExistingPolicyIndex(policies []Policy, name string) int {
