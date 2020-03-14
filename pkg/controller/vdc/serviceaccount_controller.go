@@ -12,6 +12,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -232,22 +233,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		}
 		existingPolicy.Rules = parsedBuffer.String()
 	}
-	if !roleExists(kubernetesAuth.Roles, instance.ObjectMeta.Name) {
-		newRole := &Role{
-			BoundServiceAccountNames: instance.ObjectMeta.Name,
-			BoundServiceAccountNamespaces: func(namespace string) string {
-				if BoundRolesToAllNamespaces {
-					return "*"
-				} else {
-					return namespace
-				}
-			}(instance.ObjectMeta.Namespace),
-			Name:          instance.ObjectMeta.Name,
-			TokenPolicies: []string{instance.ObjectMeta.Name},
-			TokenTtl:      TokenTtl,
-		}
-		kubernetesAuth.Roles = append(kubernetesAuth.Roles, *newRole)
-	}
+	addOrUpdateKubernetesRole(kubernetesAuth, instance.ObjectMeta)
 	err = updateKubernetesConfiguration(bvConfig, vaultConfig)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -309,6 +295,28 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 	r.client.Update(context.TODO(), vaultConfig)
 	return reconcile.Result{}, nil
+}
+
+func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta) {
+	for _, r := range kubernetesAuth.Roles {
+		if r.Name == metadata.Name {
+			return
+		}
+	}
+	newRole := &Role{
+		BoundServiceAccountNames: metadata.Name,
+		BoundServiceAccountNamespaces: func(namespace string) string {
+			if BoundRolesToAllNamespaces {
+				return "*"
+			} else {
+				return namespace
+			}
+		}(metadata.Namespace),
+		Name:          metadata.Name,
+		TokenPolicies: []string{metadata.Name},
+		TokenTtl:      TokenTtl,
+	}
+	kubernetesAuth.Roles = append(kubernetesAuth.Roles, *newRole)
 }
 
 func updateDBSecretConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
@@ -409,15 +417,6 @@ func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
 		}
 	}
 	return Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
-}
-
-func roleExists(roles []Role, name string) bool {
-	for _, r := range roles {
-		if r.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 func dbRoleExists(dbRoles []DBRole, name string) bool {
