@@ -48,7 +48,7 @@ func createServiceAccount(name string, extraAnnotations map[string]string, ctx *
 func testVaultRole(name string, namespace string, t *testing.T) {
 	vaultCR := &bankvaultsv1alpha1.Vault{}
 	bvConfig := vdc.BankVaultsConfig{}
-	err := wait.Poll(time.Second*2, time.Second*60, func() (done bool, err error) {
+	err := wait.Poll(time.Second*2, time.Second*20, func() (done bool, err error) {
 		framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: "vault", Namespace: "vault"}, vaultCR)
 		jsonData, wErr := json.Marshal(vaultCR.Spec.ExternalConfig)
 		if wErr != nil {
@@ -85,7 +85,7 @@ func testVaultRole(name string, namespace string, t *testing.T) {
 func testVaultDBRole(name string, t *testing.T) {
 	vaultCR := &bankvaultsv1alpha1.Vault{}
 	bvConfig := vdc.BankVaultsConfig{}
-	err := wait.Poll(time.Second*2, time.Second*60, func() (done bool, err error) {
+	err := wait.Poll(time.Second*2, time.Second*20, func() (done bool, err error) {
 		framework.Global.Client.Get(context.TODO(), types.NamespacedName{Name: "vault", Namespace: "vault"}, vaultCR)
 		jsonData, wErr := json.Marshal(vaultCR.Spec.ExternalConfig)
 		if wErr != nil {
@@ -102,8 +102,17 @@ func testVaultDBRole(name string, t *testing.T) {
 		if role.DbName != "mysql" || role.DefaultTtl != "1h" || role.MaxTtl != "24h" {
 			t.Errorf("Dynamic DB credentials for role '%s' aren't configured correctly", name)
 		}
-		dbSecretsIndex, _ := bvConfig.GetDBSecretsIndex()
-		if bvConfig.Secrets[dbSecretsIndex].Configuration.Config[0].AllowedRoles[0] != name {
+		dbSecret, wErr := bvConfig.GetDBSecret()
+		if wErr != nil {
+			fmt.Print("No dbSecretsConfiguration")
+			return false, nil
+		}
+		dbConfig, wErr := dbSecret.Configuration.GetDBConfig("mysql")
+		if wErr != nil {
+			fmt.Print("No dbConfig")
+			return false, nil
+		}
+		if dbConfig.AllowedRoles[0] != name {
 			t.Errorf("Role '%s' configured for dynamic DB credentials is missing from allowed_roles", name)
 		}
 		return true, nil

@@ -285,13 +285,13 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		dbMaxTtl = val
 	}
 
-	dbSecretsIndex, err := bvConfig.GetDBSecretsIndex()
+	dbSecret, err := bvConfig.GetDBSecret()
 	if err != nil {
 		reqLogger.Error(err, "Can't find database secrets configuration")
 		return reconcile.Result{}, err
 	}
 
-	if !dbRoleExists(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, instance.ObjectMeta.Name) {
+	if !dbRoleExists(dbSecret.Configuration.Roles, instance.ObjectMeta.Name) {
 		newDbRole := &DBRole{
 			Name:               instance.ObjectMeta.Name,
 			DbName:             targetDb,
@@ -299,20 +299,21 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 			DefaultTtl:         dbDefaultTtl,
 			MaxTtl:             dbMaxTtl,
 		}
-		dbConfigIndex, err := getDbConfigIndex(bvConfig.Secrets[dbSecretsIndex], targetDb)
+		dbConfig, err := dbSecret.Configuration.GetDBConfig(targetDb)
 		if err != nil {
 			reqLogger.Error(err, "Can't find target database secrets configuration")
 			return reconcile.Result{}, err
 		}
-		bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles, instance.ObjectMeta.Name)
-		bvConfig.Secrets[dbSecretsIndex].Configuration.Roles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, *newDbRole)
+		dbConfig.AllowedRoles = append(dbConfig.AllowedRoles, instance.ObjectMeta.Name)
+		dbSecret.Configuration.Roles = append(dbSecret.Configuration.Roles, *newDbRole)
 	}
 
-	configJsonData, err = json.Marshal(bvConfig.Secrets[dbSecretsIndex])
+	configJsonData, err = json.Marshal(dbSecret)
 	if err != nil {
 		reqLogger.Error(err, "Error marshaling updated config")
 		return reconcile.Result{}, err
 	}
+	dbSecretsIndex, _ := bvConfig.GetDBSecretsIndex()
 	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["secrets"].([]interface{})[dbSecretsIndex])
 	if err != nil {
 		reqLogger.Error(err, "Error unmarshaling updated config")
@@ -321,6 +322,24 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	r.client.Update(context.TODO(), vaultConfig)
 
 	return reconcile.Result{}, nil
+}
+
+func (bvConfig BankVaultsConfig) GetDBSecret() (*Secret, error) {
+	for i, s := range bvConfig.Secrets {
+		if s.Type == "database" {
+			return &bvConfig.Secrets[i], nil
+		}
+	}
+	return &Secret{}, errors.New("Database secrets configuration not found")
+}
+
+func (dbConfiguration DBConfiguration) GetDBConfig(targetDb string) (*DBConfig, error) {
+	for i, c := range dbConfiguration.Config {
+		if c.Name == targetDb {
+			return &dbConfiguration.Config[i], nil
+		}
+	}
+	return &DBConfig{}, errors.New(fmt.Sprintf("Database %s configuration not found", targetDb))
 }
 
 func (bvConfig BankVaultsConfig) GetDBSecretsIndex() (int, error) {
@@ -374,14 +393,6 @@ func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
 		}
 	}
 	return Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
-}
-
-func getBoundServiceAccountNamespace(namespace string) string {
-	if BoundRolesToAllNamespaces {
-		return "*"
-	} else {
-		return namespace
-	}
 }
 
 func getDbConfigIndex(dbSecret Secret, targetDb string) (int, error) {
