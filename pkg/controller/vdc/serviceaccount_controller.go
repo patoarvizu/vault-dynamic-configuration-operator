@@ -203,35 +203,14 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	if err != nil {
 		reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
 	}
-	var policyTemplate string
-	if val, ok := configMap.Data["policy-template"]; !ok {
-		policyTemplate = defaultPolicyTemplate
-	} else {
-		policyTemplate = val
+	err = addOrUpdatePolicy(&bvConfig, instance.ObjectMeta, *configMap)
+	if err != nil {
+		return reconcile.Result{}, err
 	}
-	t := template.Must(template.New("policy").Parse(policyTemplate))
-	var parsedBuffer bytes.Buffer
-	t.Execute(&parsedBuffer, policyTemplateInput{
-		Name:      instance.ObjectMeta.Name,
-		Namespace: instance.ObjectMeta.Namespace,
-	})
 	kubernetesAuth, err := bvConfig.getKubernetesAuth()
 	if err != nil {
 		reqLogger.Error(err, "Can't find kubernetes auth configuration")
 		return reconcile.Result{}, err
-	}
-	if !policyExists(bvConfig.Policies, instance.ObjectMeta.Name) {
-		newPolicy := &Policy{
-			Name:  instance.ObjectMeta.Name,
-			Rules: parsedBuffer.String(),
-		}
-		bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
-	} else {
-		existingPolicy, err := bvConfig.GetPolicy(instance.ObjectMeta.Name)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		existingPolicy.Rules = parsedBuffer.String()
 	}
 	addOrUpdateKubernetesRole(kubernetesAuth, instance.ObjectMeta)
 	err = updateKubernetesConfiguration(bvConfig, vaultConfig)
@@ -295,6 +274,37 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 	r.client.Update(context.TODO(), vaultConfig)
 	return reconcile.Result{}, nil
+}
+
+func addOrUpdatePolicy(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, configMap corev1.ConfigMap) error {
+	var policyTemplate string
+	if val, ok := configMap.Data["policy-template"]; !ok {
+		policyTemplate = defaultPolicyTemplate
+	} else {
+		policyTemplate = val
+	}
+	t := template.Must(template.New("policy").Parse(policyTemplate))
+	var parsedBuffer bytes.Buffer
+	t.Execute(&parsedBuffer, policyTemplateInput{
+		Name:      metadata.Name,
+		Namespace: metadata.Namespace,
+	})
+	for _, r := range bvConfig.Policies {
+		if r.Name == metadata.Name {
+			existingPolicy, err := bvConfig.GetPolicy(metadata.Name)
+			if err != nil {
+				return err
+			}
+			existingPolicy.Rules = parsedBuffer.String()
+			return nil
+		}
+	}
+	newPolicy := &Policy{
+		Name:  metadata.Name,
+		Rules: parsedBuffer.String(),
+	}
+	bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
+	return nil
 }
 
 func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta) {
@@ -421,15 +431,6 @@ func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
 
 func dbRoleExists(dbRoles []DBRole, name string) bool {
 	for _, r := range dbRoles {
-		if r.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-func policyExists(policies []Policy, name string) bool {
-	for _, r := range policies {
 		if r.Name == name {
 			return true
 		}
