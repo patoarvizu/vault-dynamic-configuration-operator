@@ -1,16 +1,18 @@
-package serviceaccount
+package vdc
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"text/template"
 
 	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -98,33 +100,33 @@ type ReconcileServiceAccount struct {
 	scheme *runtime.Scheme
 }
 
-type bankVaultsConfig struct {
-	Auth     []auth   `json:"auth"`
-	Policies []policy `json:"policies"`
-	Secrets  []secret `json:"secrets,omitempty"`
+type BankVaultsConfig struct {
+	Auth     []Auth   `json:"auth"`
+	Policies []Policy `json:"policies"`
+	Secrets  []Secret `json:"secrets,omitempty"`
 }
 
-type auth struct {
-	Roles []role `json:"roles"`
+type Auth struct {
+	Roles []Role `json:"roles"`
 	Type  string `json:"type"`
 }
 
-type policy struct {
+type Policy struct {
 	Name  string `json:"name"`
 	Rules string `json:"rules"`
 }
 
-type secret struct {
+type Secret struct {
 	Type          string          `json:"type"`
-	Configuration dbConfiguration `json:"configuration"`
+	Configuration DBConfiguration `json:"configuration"`
 }
 
-type dbConfiguration struct {
-	Config []dbConfig `json:"config"`
-	Roles  []dbRole   `json:"roles"`
+type DBConfiguration struct {
+	Config []DBConfig `json:"config"`
+	Roles  []DBRole   `json:"roles"`
 }
 
-type dbConfig struct {
+type DBConfig struct {
 	Name                  string   `json:"name"`
 	PluginName            string   `json:"plugin_name"`
 	MaxOpenConnections    int      `json:"max_open_connections,omitempty"`
@@ -136,7 +138,7 @@ type dbConfig struct {
 	Password              string   `json:"password"`
 }
 
-type dbRole struct {
+type DBRole struct {
 	Name               string   `json:"name"`
 	DbName             string   `json:"db_name"`
 	CreationStatements []string `json:"creation_statements"`
@@ -144,7 +146,7 @@ type dbRole struct {
 	MaxTtl             string   `json:"max_ttl,omitempty"`
 }
 
-type role struct {
+type Role struct {
 	BoundServiceAccountNames      string   `json:"bound_service_account_names"`
 	BoundServiceAccountNamespaces string   `json:"bound_service_account_namespaces"`
 	Name                          string   `json:"name"`
@@ -189,7 +191,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		reqLogger.Error(err, "Error getting Vault configuration")
 		return reconcile.Result{}, err
 	}
-	var bvConfig bankVaultsConfig
+	var bvConfig BankVaultsConfig
 	jsonData, _ := json.Marshal(vaultConfig.Spec.ExternalConfig)
 	err = json.Unmarshal(jsonData, &bvConfig)
 	if err != nil {
@@ -201,60 +203,20 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	if err != nil {
 		reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
 	}
-	var policyTemplate string
-	if val, ok := configMap.Data["policy-template"]; !ok {
-		policyTemplate = defaultPolicyTemplate
-	} else {
-		policyTemplate = val
+	err = addOrUpdatePolicy(&bvConfig, instance.ObjectMeta, *configMap)
+	if err != nil {
+		return reconcile.Result{}, err
 	}
-	t := template.Must(template.New("policy").Parse(policyTemplate))
-	var parsedBuffer bytes.Buffer
-	t.Execute(&parsedBuffer, policyTemplateInput{
-		Name:      instance.ObjectMeta.Name,
-		Namespace: instance.ObjectMeta.Namespace,
-	})
-	kubernetesAuthIndex, err := getKubernetesAuthIndex(bvConfig)
+	kubernetesAuth, err := bvConfig.getKubernetesAuth()
 	if err != nil {
 		reqLogger.Error(err, "Can't find kubernetes auth configuration")
 		return reconcile.Result{}, err
 	}
-	if !policyExists(bvConfig.Policies, instance.ObjectMeta.Name) {
-		newPolicy := &policy{
-			Name:  instance.ObjectMeta.Name,
-			Rules: parsedBuffer.String(),
-		}
-		bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
-	} else {
-		existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
-		bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
-	}
-	if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
-		newRole := &role{
-			BoundServiceAccountNames: instance.ObjectMeta.Name,
-			BoundServiceAccountNamespaces: func(namespace string) string {
-				if BoundRolesToAllNamespaces {
-					return "*"
-				} else {
-					return namespace
-				}
-			}(instance.ObjectMeta.Namespace),
-			Name:          instance.ObjectMeta.Name,
-			TokenPolicies: []string{instance.ObjectMeta.Name},
-			TokenTtl:      TokenTtl,
-		}
-		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
-	}
-	configJsonData, err := json.Marshal(bvConfig.Auth[kubernetesAuthIndex])
+	addOrUpdateKubernetesRole(kubernetesAuth, instance.ObjectMeta)
+	err = updateKubernetesConfiguration(bvConfig, vaultConfig)
 	if err != nil {
-		reqLogger.Error(err, "Error marshaling updated config")
 		return reconcile.Result{}, err
 	}
-	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["auth"].([]interface{})[kubernetesAuthIndex])
-	if err != nil {
-		reqLogger.Error(err, "Error unmarshaling updated config")
-		return reconcile.Result{}, err
-	}
-	vaultConfig.Spec.ExternalConfig["policies"] = bvConfig.Policies
 	r.client.Update(context.TODO(), vaultConfig)
 
 	targetDb, ok := instance.Annotations[AnnotationPrefix+"/"+DynamicDBCredentialsAnnotation]
@@ -262,7 +224,19 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		reqLogger.Info("Service account not annotated for dynamic database credentials", "ServiceAccount", instance.ObjectMeta.Name)
 		return reconcile.Result{}, nil
 	}
+	err = addOrUpdateDBRole(&bvConfig, instance.ObjectMeta, *configMap, targetDb)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	err = updateDBSecretConfiguration(bvConfig, vaultConfig)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	r.client.Update(context.TODO(), vaultConfig)
+	return reconcile.Result{}, nil
+}
 
+func addOrUpdateDBRole(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, configMap corev1.ConfigMap, targetDb string) error {
 	var creationStatement string
 	if val, ok := configMap.Data["db-user-creation-statement"]; !ok {
 		creationStatement = defaultDynamicDBUserCreationStatement
@@ -284,111 +258,180 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		dbMaxTtl = val
 	}
 
-	dbSecretsIndex, err := getDBSecretsIndex(bvConfig)
+	dbSecret, err := bvConfig.GetDBSecret()
 	if err != nil {
-		reqLogger.Error(err, "Can't find database secrets configuration")
-		return reconcile.Result{}, err
+		return err
 	}
-
-	if !dbRoleExists(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, instance.ObjectMeta.Name) {
-		newDbRole := &dbRole{
-			Name:               instance.ObjectMeta.Name,
-			DbName:             targetDb,
-			CreationStatements: []string{creationStatement},
-			DefaultTtl:         dbDefaultTtl,
-			MaxTtl:             dbMaxTtl,
+	for _, r := range dbSecret.Configuration.Roles {
+		if r.Name == metadata.Name {
+			return nil
 		}
-		dbConfigIndex, err := getDbConfigIndex(bvConfig.Secrets[dbSecretsIndex], targetDb)
-		if err != nil {
-			reqLogger.Error(err, "Can't find target database secrets configuration")
-			return reconcile.Result{}, err
-		}
-		bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Config[dbConfigIndex].AllowedRoles, instance.ObjectMeta.Name)
-		bvConfig.Secrets[dbSecretsIndex].Configuration.Roles = append(bvConfig.Secrets[dbSecretsIndex].Configuration.Roles, *newDbRole)
 	}
-
-	configJsonData, err = json.Marshal(bvConfig.Secrets[dbSecretsIndex])
+	newDbRole := &DBRole{
+		Name:               metadata.Name,
+		DbName:             targetDb,
+		CreationStatements: []string{creationStatement},
+		DefaultTtl:         dbDefaultTtl,
+		MaxTtl:             dbMaxTtl,
+	}
+	dbConfig, err := dbSecret.Configuration.GetDBConfig(targetDb)
 	if err != nil {
-		reqLogger.Error(err, "Error marshaling updated config")
-		return reconcile.Result{}, err
+		return err
 	}
-	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["secrets"].([]interface{})[dbSecretsIndex])
-	if err != nil {
-		reqLogger.Error(err, "Error unmarshaling updated config")
-		return reconcile.Result{}, err
-	}
-	r.client.Update(context.TODO(), vaultConfig)
-
-	return reconcile.Result{}, nil
+	dbConfig.AllowedRoles = append(dbConfig.AllowedRoles, metadata.Name)
+	dbSecret.Configuration.Roles = append(dbSecret.Configuration.Roles, *newDbRole)
+	return nil
 }
 
-func getBoundServiceAccountNamespace(namespace string) string {
-	if BoundRolesToAllNamespaces {
-		return "*"
+func addOrUpdatePolicy(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, configMap corev1.ConfigMap) error {
+	var policyTemplate string
+	if val, ok := configMap.Data["policy-template"]; !ok {
+		policyTemplate = defaultPolicyTemplate
 	} else {
-		return namespace
+		policyTemplate = val
 	}
+	t := template.Must(template.New("policy").Parse(policyTemplate))
+	var parsedBuffer bytes.Buffer
+	t.Execute(&parsedBuffer, policyTemplateInput{
+		Name:      metadata.Name,
+		Namespace: metadata.Namespace,
+	})
+	for _, r := range bvConfig.Policies {
+		if r.Name == metadata.Name {
+			existingPolicy, err := bvConfig.GetPolicy(metadata.Name)
+			if err != nil {
+				return err
+			}
+			existingPolicy.Rules = parsedBuffer.String()
+			return nil
+		}
+	}
+	newPolicy := &Policy{
+		Name:  metadata.Name,
+		Rules: parsedBuffer.String(),
+	}
+	bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
+	return nil
 }
 
-func getDBSecretsIndex(bvConfig bankVaultsConfig) (int, error) {
+func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta) {
+	for _, r := range kubernetesAuth.Roles {
+		if r.Name == metadata.Name {
+			return
+		}
+	}
+	newRole := &Role{
+		BoundServiceAccountNames: metadata.Name,
+		BoundServiceAccountNamespaces: func(namespace string) string {
+			if BoundRolesToAllNamespaces {
+				return "*"
+			} else {
+				return namespace
+			}
+		}(metadata.Namespace),
+		Name:          metadata.Name,
+		TokenPolicies: []string{metadata.Name},
+		TokenTtl:      TokenTtl,
+	}
+	kubernetesAuth.Roles = append(kubernetesAuth.Roles, *newRole)
+}
+
+func updateDBSecretConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
+	dbSecret, err := bvConfig.GetDBSecret()
+	if err != nil {
+		return err
+	}
+	configJsonData, err := json.Marshal(dbSecret)
+	for i, s := range bvConfig.Secrets {
+		if s.Type != "database" {
+			continue
+		}
+		return json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["secrets"].([]interface{})[i])
+	}
+	return nil
+}
+
+func updateKubernetesConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
+	kubernetesAuth, err := bvConfig.getKubernetesAuth()
+	if err != nil {
+		return err
+	}
+	configJsonData, err := json.Marshal(kubernetesAuth)
+	if err != nil {
+		return err
+	}
+	for i, a := range bvConfig.Auth {
+		if a.Type != "kubernetes" {
+			continue
+		}
+		err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["auth"].([]interface{})[i])
+		if err != nil {
+			return err
+		}
+		vaultConfig.Spec.ExternalConfig["policies"] = bvConfig.Policies
+		return nil
+	}
+	return nil
+}
+
+func (bvConfig BankVaultsConfig) GetDBSecret() (*Secret, error) {
 	for i, s := range bvConfig.Secrets {
 		if s.Type == "database" {
-			return i, nil
+			return &bvConfig.Secrets[i], nil
 		}
 	}
-	return -1, errors.New("Database secrets configuration not found")
+	return &Secret{}, errors.New("Database secrets configuration not found")
 }
 
-func getDbConfigIndex(dbSecret secret, targetDb string) (int, error) {
-	for i, c := range dbSecret.Configuration.Config {
+func (dbConfiguration DBConfiguration) GetDBConfig(targetDb string) (*DBConfig, error) {
+	for i, c := range dbConfiguration.Config {
 		if c.Name == targetDb {
-			return i, nil
+			return &dbConfiguration.Config[i], nil
 		}
 	}
-	return -1, errors.New("Database configuration not found")
+	return &DBConfig{}, errors.New(fmt.Sprintf("Database %s configuration not found", targetDb))
 }
 
-func getKubernetesAuthIndex(bvConfig bankVaultsConfig) (int, error) {
+func (bvConfig BankVaultsConfig) getKubernetesAuth() (*Auth, error) {
 	for i, a := range bvConfig.Auth {
 		if a.Type == "kubernetes" {
-			return i, nil
+			return &bvConfig.Auth[i], nil
 		}
 	}
-	return -1, errors.New("Kubernetes authentication configuration not found")
+	return &Auth{}, errors.New("Kubernetes authentication configuration not found")
 }
 
-func getExistingPolicyIndex(policies []policy, name string) int {
-	for i, p := range policies {
+func (bvConfig BankVaultsConfig) GetRole(name string) (Role, error) {
+	kubernetesAuth, err := bvConfig.getKubernetesAuth()
+	if err != nil {
+		return Role{}, err
+	}
+	for _, r := range kubernetesAuth.Roles {
+		if r.Name == name {
+			return r, nil
+		}
+	}
+	return Role{}, errors.New(fmt.Sprintf("Role %s not found", name))
+}
+
+func (bvConfig BankVaultsConfig) GetDBRole(name string) (DBRole, error) {
+	dbSecret, err := bvConfig.GetDBSecret()
+	if err != nil {
+		return DBRole{}, err
+	}
+	for _, r := range dbSecret.Configuration.Roles {
+		if r.Name == name {
+			return r, nil
+		}
+	}
+	return DBRole{}, errors.New(fmt.Sprintf("Role %s not found", name))
+}
+
+func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
+	for _, p := range bvConfig.Policies {
 		if p.Name == name {
-			return i
+			return p, nil
 		}
 	}
-	return -1
-}
-
-func roleExists(roles []role, name string) bool {
-	for _, r := range roles {
-		if r.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-func dbRoleExists(dbRoles []dbRole, name string) bool {
-	for _, r := range dbRoles {
-		if r.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-func policyExists(policies []policy, name string) bool {
-	for _, r := range policies {
-		if r.Name == name {
-			return true
-		}
-	}
-	return false
+	return Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
 }

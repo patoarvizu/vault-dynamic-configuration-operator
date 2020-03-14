@@ -15,7 +15,7 @@ import (
 	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
 	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/apis"
 	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/controller"
-	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/controller/serviceaccount"
+	"github.com/patoarvizu/vault-dynamic-configuration-operator/pkg/controller/vdc"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
@@ -51,12 +51,12 @@ func main() {
 
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
-	pflag.StringVar(&serviceaccount.TargetVaultName, "target-vault-name", "vault", "Name of Vault custom resource to target")
-	pflag.StringVar(&serviceaccount.AnnotationPrefix, "annotation-prefix", "vault.patoarvizu.dev", "Prefix of the annotations the operator should watch for in service accounts to configure roles and policies")
-	pflag.StringVar(&serviceaccount.AutoConfigureAnnotation, "auto-configure-annotation", "auto-configure", "Annotation the operator should watch for in service accounts")
-	pflag.StringVar(&serviceaccount.DynamicDBCredentialsAnnotation, "auto-configuredb-creds-annotation", "db-dynamic-creds", "Annotation the operator should watch for in service accounts to configure access to dynamic DB credentials")
-	pflag.BoolVar(&serviceaccount.BoundRolesToAllNamespaces, "bound-roles-to-all-namespaces", false, "Set 'bound_service_account_namespaces' to '*' instead of the service account's namespace")
-	pflag.StringVar(&serviceaccount.TokenTtl, "token-ttl", "5m", "Value to set roles' 'token_ttl' to")
+	pflag.StringVar(&vdc.TargetVaultName, "target-vault-name", "vault", "Name of Vault custom resource to target")
+	pflag.StringVar(&vdc.AnnotationPrefix, "annotation-prefix", "vault.patoarvizu.dev", "Prefix of the annotations the operator should watch for in service accounts to configure roles and policies")
+	pflag.StringVar(&vdc.AutoConfigureAnnotation, "auto-configure-annotation", "auto-configure", "Annotation the operator should watch for in service accounts")
+	pflag.StringVar(&vdc.DynamicDBCredentialsAnnotation, "auto-configuredb-creds-annotation", "db-dynamic-creds", "Annotation the operator should watch for in service accounts to configure access to dynamic DB credentials")
+	pflag.BoolVar(&vdc.BoundRolesToAllNamespaces, "bound-roles-to-all-namespaces", false, "Set 'bound_service_account_namespaces' to '*' instead of the service account's namespace")
+	pflag.StringVar(&vdc.TokenTtl, "token-ttl", "5m", "Value to set roles' 'token_ttl' to")
 
 	pflag.Parse()
 
