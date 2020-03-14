@@ -214,7 +214,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		Name:      instance.ObjectMeta.Name,
 		Namespace: instance.ObjectMeta.Namespace,
 	})
-	kubernetesAuthIndex, err := bvConfig.GetKubernetesAuthIndex()
+	kubernetesAuth, err := bvConfig.getKubernetesAuth()
 	if err != nil {
 		reqLogger.Error(err, "Can't find kubernetes auth configuration")
 		return reconcile.Result{}, err
@@ -232,7 +232,7 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		}
 		existingPolicy.Rules = parsedBuffer.String()
 	}
-	if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
+	if !roleExists(kubernetesAuth.Roles, instance.ObjectMeta.Name) {
 		newRole := &Role{
 			BoundServiceAccountNames: instance.ObjectMeta.Name,
 			BoundServiceAccountNamespaces: func(namespace string) string {
@@ -246,11 +246,16 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 			TokenPolicies: []string{instance.ObjectMeta.Name},
 			TokenTtl:      TokenTtl,
 		}
-		bvConfig.Auth[kubernetesAuthIndex].Roles = append(bvConfig.Auth[kubernetesAuthIndex].Roles, *newRole)
+		kubernetesAuth.Roles = append(kubernetesAuth.Roles, *newRole)
 	}
-	configJsonData, err := json.Marshal(bvConfig.Auth[kubernetesAuthIndex])
+	configJsonData, err := json.Marshal(kubernetesAuth)
 	if err != nil {
 		reqLogger.Error(err, "Error marshaling updated config")
+		return reconcile.Result{}, err
+	}
+	kubernetesAuthIndex, err := bvConfig.GetKubernetesAuthIndex()
+	if err != nil {
+		reqLogger.Error(err, "Can't find kubernetes auth configuration")
 		return reconcile.Result{}, err
 	}
 	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["auth"].([]interface{})[kubernetesAuthIndex])
@@ -354,6 +359,15 @@ func (bvConfig BankVaultsConfig) GetDBSecretsIndex() (int, error) {
 	return -1, errors.New("Database secrets configuration not found")
 }
 
+func (bvConfig BankVaultsConfig) getKubernetesAuth() (*Auth, error) {
+	for i, a := range bvConfig.Auth {
+		if a.Type == "kubernetes" {
+			return &bvConfig.Auth[i], nil
+		}
+	}
+	return &Auth{}, errors.New("Kubernetes authentication configuration not found")
+}
+
 func (bvConfig BankVaultsConfig) GetKubernetesAuthIndex() (int, error) {
 	for i, a := range bvConfig.Auth {
 		if a.Type == "kubernetes" {
@@ -364,11 +378,11 @@ func (bvConfig BankVaultsConfig) GetKubernetesAuthIndex() (int, error) {
 }
 
 func (bvConfig BankVaultsConfig) GetRole(name string) (Role, error) {
-	kubernetesAuthIndex, err := bvConfig.GetKubernetesAuthIndex()
+	kubernetesAuth, err := bvConfig.getKubernetesAuth()
 	if err != nil {
 		return Role{}, err
 	}
-	for _, r := range bvConfig.Auth[kubernetesAuthIndex].Roles {
+	for _, r := range kubernetesAuth.Roles {
 		if r.Name == name {
 			return r, nil
 		}
