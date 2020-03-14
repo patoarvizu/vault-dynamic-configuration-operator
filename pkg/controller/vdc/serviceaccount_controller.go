@@ -226,8 +226,11 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		}
 		bvConfig.Policies = append(bvConfig.Policies, *newPolicy)
 	} else {
-		existingPolicyIndex := getExistingPolicyIndex(bvConfig.Policies, instance.ObjectMeta.Name)
-		bvConfig.Policies[existingPolicyIndex].Rules = parsedBuffer.String()
+		existingPolicy, err := bvConfig.GetPolicy(instance.ObjectMeta.Name)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		existingPolicy.Rules = parsedBuffer.String()
 	}
 	if !roleExists(bvConfig.Auth[kubernetesAuthIndex].Roles, instance.ObjectMeta.Name) {
 		newRole := &Role{
@@ -395,22 +398,13 @@ func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
 	return Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
 }
 
-func getDbConfigIndex(dbSecret Secret, targetDb string) (int, error) {
-	for i, c := range dbSecret.Configuration.Config {
-		if c.Name == targetDb {
-			return i, nil
-		}
-	}
-	return -1, errors.New("Database configuration not found")
-}
-
-func getExistingPolicyIndex(policies []Policy, name string) int {
-	for i, p := range policies {
+func (bvConfig BankVaultsConfig) getExistingPolicy(name string) (*Policy, error) {
+	for i, p := range bvConfig.Policies {
 		if p.Name == name {
-			return i
+			return &bvConfig.Policies[i], nil
 		}
 	}
-	return -1
+	return &Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
 }
 
 func roleExists(roles []Role, name string) bool {
