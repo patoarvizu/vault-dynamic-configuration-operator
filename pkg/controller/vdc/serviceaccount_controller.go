@@ -411,15 +411,6 @@ func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
 	return Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
 }
 
-func (bvConfig BankVaultsConfig) getExistingPolicy(name string) (*Policy, error) {
-	for i, p := range bvConfig.Policies {
-		if p.Name == name {
-			return &bvConfig.Policies[i], nil
-		}
-	}
-	return &Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
-}
-
 func roleExists(roles []Role, name string) bool {
 	for _, r := range roles {
 		if r.Name == name {
