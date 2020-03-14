@@ -248,7 +248,10 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		}
 		kubernetesAuth.Roles = append(kubernetesAuth.Roles, *newRole)
 	}
-	updateKubernetesConfiguration(bvConfig, vaultConfig)
+	err = updateKubernetesConfiguration(bvConfig, vaultConfig)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 	r.client.Update(context.TODO(), vaultConfig)
 
 	targetDb, ok := instance.Annotations[AnnotationPrefix+"/"+DynamicDBCredentialsAnnotation]
@@ -300,21 +303,27 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		dbConfig.AllowedRoles = append(dbConfig.AllowedRoles, instance.ObjectMeta.Name)
 		dbSecret.Configuration.Roles = append(dbSecret.Configuration.Roles, *newDbRole)
 	}
-
-	configJsonData, err := json.Marshal(dbSecret)
+	err = updateDBSecretConfiguration(bvConfig, vaultConfig)
 	if err != nil {
-		reqLogger.Error(err, "Error marshaling updated config")
-		return reconcile.Result{}, err
-	}
-	dbSecretsIndex, _ := bvConfig.GetDBSecretsIndex()
-	err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["secrets"].([]interface{})[dbSecretsIndex])
-	if err != nil {
-		reqLogger.Error(err, "Error unmarshaling updated config")
 		return reconcile.Result{}, err
 	}
 	r.client.Update(context.TODO(), vaultConfig)
-
 	return reconcile.Result{}, nil
+}
+
+func updateDBSecretConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
+	dbSecret, err := bvConfig.GetDBSecret()
+	if err != nil {
+		return err
+	}
+	configJsonData, err := json.Marshal(dbSecret)
+	for i, s := range bvConfig.Secrets {
+		if s.Type != "database" {
+			continue
+		}
+		return json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["secrets"].([]interface{})[i])
+	}
+	return nil
 }
 
 func updateKubernetesConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
@@ -358,15 +367,6 @@ func (dbConfiguration DBConfiguration) GetDBConfig(targetDb string) (*DBConfig, 
 	return &DBConfig{}, errors.New(fmt.Sprintf("Database %s configuration not found", targetDb))
 }
 
-func (bvConfig BankVaultsConfig) GetDBSecretsIndex() (int, error) {
-	for i, s := range bvConfig.Secrets {
-		if s.Type == "database" {
-			return i, nil
-		}
-	}
-	return -1, errors.New("Database secrets configuration not found")
-}
-
 func (bvConfig BankVaultsConfig) getKubernetesAuth() (*Auth, error) {
 	for i, a := range bvConfig.Auth {
 		if a.Type == "kubernetes" {
@@ -390,11 +390,11 @@ func (bvConfig BankVaultsConfig) GetRole(name string) (Role, error) {
 }
 
 func (bvConfig BankVaultsConfig) GetDBRole(name string) (DBRole, error) {
-	dbSecretsIndex, err := bvConfig.GetDBSecretsIndex()
+	dbSecret, err := bvConfig.GetDBSecret()
 	if err != nil {
 		return DBRole{}, err
 	}
-	for _, r := range bvConfig.Secrets[dbSecretsIndex].Configuration.Roles {
+	for _, r := range dbSecret.Configuration.Roles {
 		if r.Name == name {
 			return r, nil
 		}
