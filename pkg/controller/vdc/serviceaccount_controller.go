@@ -224,7 +224,19 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		reqLogger.Info("Service account not annotated for dynamic database credentials", "ServiceAccount", instance.ObjectMeta.Name)
 		return reconcile.Result{}, nil
 	}
+	err = addOrUpdateDBRole(&bvConfig, instance.ObjectMeta, *configMap, targetDb)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	err = updateDBSecretConfiguration(bvConfig, vaultConfig)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	r.client.Update(context.TODO(), vaultConfig)
+	return reconcile.Result{}, nil
+}
 
+func addOrUpdateDBRole(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, configMap corev1.ConfigMap, targetDb string) error {
 	var creationStatement string
 	if val, ok := configMap.Data["db-user-creation-statement"]; !ok {
 		creationStatement = defaultDynamicDBUserCreationStatement
@@ -248,32 +260,27 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 
 	dbSecret, err := bvConfig.GetDBSecret()
 	if err != nil {
-		reqLogger.Error(err, "Can't find database secrets configuration")
-		return reconcile.Result{}, err
+		return err
 	}
-
-	if !dbRoleExists(dbSecret.Configuration.Roles, instance.ObjectMeta.Name) {
-		newDbRole := &DBRole{
-			Name:               instance.ObjectMeta.Name,
-			DbName:             targetDb,
-			CreationStatements: []string{creationStatement},
-			DefaultTtl:         dbDefaultTtl,
-			MaxTtl:             dbMaxTtl,
+	for _, r := range dbSecret.Configuration.Roles {
+		if r.Name == metadata.Name {
+			return nil
 		}
-		dbConfig, err := dbSecret.Configuration.GetDBConfig(targetDb)
-		if err != nil {
-			reqLogger.Error(err, "Can't find target database secrets configuration")
-			return reconcile.Result{}, err
-		}
-		dbConfig.AllowedRoles = append(dbConfig.AllowedRoles, instance.ObjectMeta.Name)
-		dbSecret.Configuration.Roles = append(dbSecret.Configuration.Roles, *newDbRole)
 	}
-	err = updateDBSecretConfiguration(bvConfig, vaultConfig)
+	newDbRole := &DBRole{
+		Name:               metadata.Name,
+		DbName:             targetDb,
+		CreationStatements: []string{creationStatement},
+		DefaultTtl:         dbDefaultTtl,
+		MaxTtl:             dbMaxTtl,
+	}
+	dbConfig, err := dbSecret.Configuration.GetDBConfig(targetDb)
 	if err != nil {
-		return reconcile.Result{}, err
+		return err
 	}
-	r.client.Update(context.TODO(), vaultConfig)
-	return reconcile.Result{}, nil
+	dbConfig.AllowedRoles = append(dbConfig.AllowedRoles, metadata.Name)
+	dbSecret.Configuration.Roles = append(dbSecret.Configuration.Roles, *newDbRole)
+	return nil
 }
 
 func addOrUpdatePolicy(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, configMap corev1.ConfigMap) error {
@@ -427,13 +434,4 @@ func (bvConfig BankVaultsConfig) GetPolicy(name string) (Policy, error) {
 		}
 	}
 	return Policy{}, errors.New(fmt.Sprintf("Policy %s not found", name))
-}
-
-func dbRoleExists(dbRoles []DBRole, name string) bool {
-	for _, r := range dbRoles {
-		if r.Name == name {
-			return true
-		}
-	}
-	return false
 }
