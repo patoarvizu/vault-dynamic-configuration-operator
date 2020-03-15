@@ -168,7 +168,6 @@ type policyTemplateInput struct {
 
 func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling ServiceAccount")
 
 	instance := &corev1.ServiceAccount{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
@@ -180,22 +179,20 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 
 	if val, ok := instance.Annotations[AnnotationPrefix+"/"+AutoConfigureAnnotation]; !ok || val != "true" {
-		reqLogger.Info("Service account not annotated or auto-configure set to 'false'", "ServiceAccount", instance.ObjectMeta.Name)
 		return reconcile.Result{}, nil
 	}
+	reqLogger.Info("Configuring ServiceAccount for Vault authentication", "ServiceAccount", instance.ObjectMeta.Name, "Namespace", instance.ObjectMeta.Namespace)
 
 	vaultConfig := &bankvaultsv1alpha1.Vault{}
 	ns, _ := k8sutil.GetOperatorNamespace()
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: TargetVaultName, Namespace: ns}, vaultConfig)
 	if err != nil {
-		reqLogger.Error(err, "Error getting Vault configuration")
 		return reconcile.Result{}, err
 	}
 	var bvConfig BankVaultsConfig
 	jsonData, _ := json.Marshal(vaultConfig.Spec.ExternalConfig)
 	err = json.Unmarshal(jsonData, &bvConfig)
 	if err != nil {
-		reqLogger.Error(err, "Error unmarshaling config")
 		return reconcile.Result{}, err
 	}
 	configMap := &corev1.ConfigMap{}
@@ -209,7 +206,6 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 	kubernetesAuth, err := bvConfig.getKubernetesAuth()
 	if err != nil {
-		reqLogger.Error(err, "Can't find kubernetes auth configuration")
 		return reconcile.Result{}, err
 	}
 	addOrUpdateKubernetesRole(kubernetesAuth, instance.ObjectMeta)
@@ -221,9 +217,9 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 
 	targetDb, ok := instance.Annotations[AnnotationPrefix+"/"+DynamicDBCredentialsAnnotation]
 	if !ok {
-		reqLogger.Info("Service account not annotated for dynamic database credentials", "ServiceAccount", instance.ObjectMeta.Name)
 		return reconcile.Result{}, nil
 	}
+	reqLogger.Info("Configuring ServiceAccount for dynamic database secrets", "ServiceAccount", instance.ObjectMeta.Name, "Namespace", instance.ObjectMeta.Namespace, "TargetDB", targetDb)
 	err = addOrUpdateDBRole(&bvConfig, instance.ObjectMeta, *configMap, targetDb)
 	if err != nil {
 		return reconcile.Result{}, err
