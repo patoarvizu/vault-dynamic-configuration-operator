@@ -45,9 +45,9 @@ func createServiceAccount(name string, namespace string, extraAnnotations map[st
 	return framework.Global.Client.Create(context.TODO(), opertatorTestServiceAccount, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 60, RetryInterval: time.Second * 1})
 }
 
-func namespaceIsInAllowedList(namespace string, allowedNamespaces []string) bool {
-	for _, ns := range allowedNamespaces {
-		if ns == namespace {
+func namespaceIsInAllowedList(namespace string, allowedNamespaces interface{}) bool {
+	for _, ns := range allowedNamespaces.([]interface{}) {
+		if ns.(string) == namespace {
 			return true
 		}
 	}
@@ -74,11 +74,11 @@ func testVaultRole(name string, namespaces []string, t *testing.T) {
 		if role.BoundServiceAccountNames != name || role.TokenTtl != "5m" {
 			t.Errorf("Test role '%s' is not configured correctly", name)
 		}
+		if len(role.BoundServiceAccountNamespaces.([]interface{})) < len(namespaces) {
+			return false, nil
+		}
 		for _, ns := range namespaces {
-			if _, ok := role.BoundServiceAccountNamespaces.([]string); !ok {
-				t.Errorf("List of bound namespaces ro role '%s' is not a list of strings", name)
-			}
-			if !namespaceIsInAllowedList(ns, role.BoundServiceAccountNamespaces.([]string)) {
+			if !namespaceIsInAllowedList(ns, role.BoundServiceAccountNamespaces) {
 				t.Errorf("Namespace '%s' is not in list of role bound namespaces", ns)
 			}
 		}

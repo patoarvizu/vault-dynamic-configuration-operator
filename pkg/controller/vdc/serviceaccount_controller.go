@@ -319,18 +319,13 @@ func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta)
 				switch r.BoundServiceAccountNamespaces.(type) {
 				case string:
 					kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = []string{metadata.Name}
-				case []string:
-					foundNamespace := false
-					for _, n := range r.BoundServiceAccountNamespaces.([]string) {
-						if n == metadata.Namespace {
-							foundNamespace = true
-							break
+				case []interface{}:
+					for _, n := range r.BoundServiceAccountNamespaces.([]interface{}) {
+						if n.(string) == metadata.Namespace {
+							return
 						}
 					}
-					if foundNamespace {
-						return
-					}
-					kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = append(kubernetesAuth.Roles[i].BoundServiceAccountNamespaces.([]string), metadata.Namespace)
+					kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = append(kubernetesAuth.Roles[i].BoundServiceAccountNamespaces.([]interface{}), metadata.Namespace)
 				}
 			}
 			return
