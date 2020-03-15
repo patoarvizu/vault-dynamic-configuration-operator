@@ -147,18 +147,18 @@ type DBRole struct {
 }
 
 type Role struct {
-	BoundServiceAccountNames      string   `json:"bound_service_account_names"`
-	BoundServiceAccountNamespaces []string `json:"bound_service_account_namespaces"`
-	Name                          string   `json:"name"`
-	TokenPolicies                 []string `json:"token_policies"`
-	TokenTtl                      string   `json:"token_ttl,omitempty"`
-	TokenMaxTtl                   string   `json:"token_max_ttl,omitempty"`
-	TokenBoundCidrs               []string `json:"token_bound_cidrs,omitempty"`
-	TokenExplicitMaxTtl           string   `json:"token_explicit_max_ttl,omitempty"`
-	TokenNoDefaultPolicy          bool     `json:"token_no_default_policy,omitempty"`
-	TokenNumUses                  int      `json:"token_num_uses,omitempty"`
-	TokenPeriod                   string   `json:"token_period,omitempty"`
-	TokenType                     string   `json:"token_type,omitempty"`
+	BoundServiceAccountNames      string      `json:"bound_service_account_names"`
+	BoundServiceAccountNamespaces interface{} `json:"bound_service_account_namespaces"`
+	Name                          string      `json:"name"`
+	TokenPolicies                 []string    `json:"token_policies"`
+	TokenTtl                      string      `json:"token_ttl,omitempty"`
+	TokenMaxTtl                   string      `json:"token_max_ttl,omitempty"`
+	TokenBoundCidrs               []string    `json:"token_bound_cidrs,omitempty"`
+	TokenExplicitMaxTtl           string      `json:"token_explicit_max_ttl,omitempty"`
+	TokenNoDefaultPolicy          bool        `json:"token_no_default_policy,omitempty"`
+	TokenNumUses                  int         `json:"token_num_uses,omitempty"`
+	TokenPeriod                   string      `json:"token_period,omitempty"`
+	TokenType                     string      `json:"token_type,omitempty"`
 }
 
 type policyTemplateInput struct {
@@ -316,17 +316,22 @@ func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta)
 			if BoundRolesToAllNamespaces {
 				kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = []string{"*"}
 			} else {
-				foundNamespace := false
-				for _, n := range r.BoundServiceAccountNamespaces {
-					if n == metadata.Namespace {
-						foundNamespace = true
-						break
+				switch r.BoundServiceAccountNamespaces.(type) {
+				case string:
+					kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = []string{metadata.Name}
+				case []string:
+					foundNamespace := false
+					for _, n := range r.BoundServiceAccountNamespaces.([]string) {
+						if n == metadata.Namespace {
+							foundNamespace = true
+							break
+						}
 					}
+					if foundNamespace {
+						return
+					}
+					kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = append(kubernetesAuth.Roles[i].BoundServiceAccountNamespaces.([]string), metadata.Namespace)
 				}
-				if foundNamespace {
-					return
-				}
-				kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = append(kubernetesAuth.Roles[i].BoundServiceAccountNamespaces, metadata.Namespace)
 			}
 			return
 		}

@@ -75,8 +75,11 @@ func testVaultRole(name string, namespaces []string, t *testing.T) {
 			t.Errorf("Test role '%s' is not configured correctly", name)
 		}
 		for _, ns := range namespaces {
-			if !namespaceIsInAllowedList(ns, role.BoundServiceAccountNamespaces) {
-				t.Errorf("Namespace %s is not in list of role bound namespaces", ns)
+			if _, ok := role.BoundServiceAccountNamespaces.([]string); !ok {
+				t.Errorf("List of bound namespaces ro role '%s' is not a list of strings", name)
+			}
+			if !namespaceIsInAllowedList(ns, role.BoundServiceAccountNamespaces.([]string)) {
+				t.Errorf("Namespace '%s' is not in list of role bound namespaces", ns)
 			}
 		}
 		if role.TokenPolicies[0] != name {
