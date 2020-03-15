@@ -313,17 +313,21 @@ func addOrUpdatePolicy(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, c
 func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta) {
 	for i, r := range kubernetesAuth.Roles {
 		if r.Name == metadata.Name {
-			foundNamespace := false
-			for _, n := range r.BoundServiceAccountNamespaces {
-				if n == metadata.Namespace {
-					foundNamespace = true
-					break
+			if BoundRolesToAllNamespaces {
+				kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = []string{"*"}
+			} else {
+				foundNamespace := false
+				for _, n := range r.BoundServiceAccountNamespaces {
+					if n == metadata.Namespace {
+						foundNamespace = true
+						break
+					}
 				}
+				if foundNamespace {
+					return
+				}
+				kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = append(kubernetesAuth.Roles[i].BoundServiceAccountNamespaces, metadata.Namespace)
 			}
-			if foundNamespace {
-				return
-			}
-			kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = append(kubernetesAuth.Roles[i].BoundServiceAccountNamespaces, metadata.Namespace)
 			return
 		}
 	}
