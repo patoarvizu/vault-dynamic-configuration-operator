@@ -60,29 +60,22 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	err = c.Watch(&source.Kind{
+		Type: &bankvaultsv1alpha1.Vault{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(h handler.MapObject) []reconcile.Request {
+				return getRequestsForAllAnnotatedServiceAccounts(mgr)
+			}),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	err = c.Watch(&source.Kind{
 		Type: &corev1.ConfigMap{}},
 		&handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(h handler.MapObject) []reconcile.Request {
-				namespaces := &corev1.NamespaceList{}
-				mgr.GetClient().List(context.TODO(), namespaces)
-				requests := []reconcile.Request{}
-				for _, ns := range namespaces.Items {
-					serviceAccounts := &corev1.ServiceAccountList{}
-					mgr.GetClient().List(context.TODO(), serviceAccounts, client.InNamespace(ns.ObjectMeta.Name))
-					for _, sa := range serviceAccounts.Items {
-						if val, ok := sa.ObjectMeta.Annotations[AutoConfigureAnnotation]; ok {
-							if val == "true" {
-								requests = append(requests, reconcile.Request{
-									NamespacedName: types.NamespacedName{
-										Name:      sa.ObjectMeta.Name,
-										Namespace: sa.ObjectMeta.Namespace,
-									},
-								})
-							}
-						}
-					}
-				}
-				return requests
+				return getRequestsForAllAnnotatedServiceAccounts(mgr)
 			}),
 		},
 	)
@@ -91,6 +84,29 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	return nil
+}
+
+func getRequestsForAllAnnotatedServiceAccounts(mgr manager.Manager) []reconcile.Request {
+	namespaces := &corev1.NamespaceList{}
+	mgr.GetClient().List(context.TODO(), namespaces)
+	requests := []reconcile.Request{}
+	for _, ns := range namespaces.Items {
+		serviceAccounts := &corev1.ServiceAccountList{}
+		mgr.GetClient().List(context.TODO(), serviceAccounts, client.InNamespace(ns.ObjectMeta.Name))
+		for _, sa := range serviceAccounts.Items {
+			if val, ok := sa.ObjectMeta.Annotations[AnnotationPrefix+"/"+AutoConfigureAnnotation]; ok {
+				if val == "true" {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      sa.ObjectMeta.Name,
+							Namespace: sa.ObjectMeta.Namespace,
+						},
+					})
+				}
+			}
+		}
+	}
+	return requests
 }
 
 var _ reconcile.Reconciler = &ReconcileServiceAccount{}
@@ -292,13 +308,9 @@ func addOrUpdatePolicy(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, c
 		Name:      metadata.Name,
 		Namespace: metadata.Namespace,
 	})
-	for _, r := range bvConfig.Policies {
+	for i, r := range bvConfig.Policies {
 		if r.Name == metadata.Name {
-			existingPolicy, err := bvConfig.GetPolicy(metadata.Name)
-			if err != nil {
-				return err
-			}
-			existingPolicy.Rules = parsedBuffer.String()
+			bvConfig.Policies[i].Rules = parsedBuffer.String()
 			return nil
 		}
 	}
