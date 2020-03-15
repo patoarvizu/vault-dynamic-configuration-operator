@@ -148,7 +148,7 @@ type DBRole struct {
 
 type Role struct {
 	BoundServiceAccountNames      string   `json:"bound_service_account_names"`
-	BoundServiceAccountNamespaces string   `json:"bound_service_account_namespaces"`
+	BoundServiceAccountNamespaces []string `json:"bound_service_account_namespaces"`
 	Name                          string   `json:"name"`
 	TokenPolicies                 []string `json:"token_policies"`
 	TokenTtl                      string   `json:"token_ttl,omitempty"`
@@ -311,18 +311,29 @@ func addOrUpdatePolicy(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, c
 }
 
 func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta) {
-	for _, r := range kubernetesAuth.Roles {
+	for i, r := range kubernetesAuth.Roles {
 		if r.Name == metadata.Name {
+			foundNamespace := false
+			for _, n := range r.BoundServiceAccountNamespaces {
+				if n == metadata.Namespace {
+					foundNamespace = true
+					break
+				}
+			}
+			if foundNamespace {
+				return
+			}
+			kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = append(kubernetesAuth.Roles[i].BoundServiceAccountNamespaces, metadata.Namespace)
 			return
 		}
 	}
 	newRole := &Role{
 		BoundServiceAccountNames: metadata.Name,
-		BoundServiceAccountNamespaces: func(namespace string) string {
+		BoundServiceAccountNamespaces: func(namespace string) []string {
 			if BoundRolesToAllNamespaces {
-				return "*"
+				return []string{"*"}
 			} else {
-				return namespace
+				return []string{namespace}
 			}
 		}(metadata.Namespace),
 		Name:          metadata.Name,

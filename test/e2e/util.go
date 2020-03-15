@@ -62,7 +62,7 @@ func testVaultRole(name string, namespace string, t *testing.T) {
 		if wErr != nil {
 			return false, nil
 		}
-		if role.BoundServiceAccountNames != name || role.BoundServiceAccountNamespaces != namespace || role.TokenTtl != "5m" {
+		if role.BoundServiceAccountNames != name || role.BoundServiceAccountNamespaces[0] != namespace || role.TokenTtl != "5m" {
 			t.Errorf("Test role '%s' is not configured correctly", name)
 		}
 		if role.TokenPolicies[0] != name {
