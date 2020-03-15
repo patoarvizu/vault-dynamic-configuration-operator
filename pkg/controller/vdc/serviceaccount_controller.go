@@ -147,18 +147,18 @@ type DBRole struct {
 }
 
 type Role struct {
-	BoundServiceAccountNames      string   `json:"bound_service_account_names"`
-	BoundServiceAccountNamespaces string   `json:"bound_service_account_namespaces"`
-	Name                          string   `json:"name"`
-	TokenPolicies                 []string `json:"token_policies"`
-	TokenTtl                      string   `json:"token_ttl,omitempty"`
-	TokenMaxTtl                   string   `json:"token_max_ttl,omitempty"`
-	TokenBoundCidrs               []string `json:"token_bound_cidrs,omitempty"`
-	TokenExplicitMaxTtl           string   `json:"token_explicit_max_ttl,omitempty"`
-	TokenNoDefaultPolicy          bool     `json:"token_no_default_policy,omitempty"`
-	TokenNumUses                  int      `json:"token_num_uses,omitempty"`
-	TokenPeriod                   string   `json:"token_period,omitempty"`
-	TokenType                     string   `json:"token_type,omitempty"`
+	BoundServiceAccountNames      string      `json:"bound_service_account_names"`
+	BoundServiceAccountNamespaces interface{} `json:"bound_service_account_namespaces"`
+	Name                          string      `json:"name"`
+	TokenPolicies                 []string    `json:"token_policies"`
+	TokenTtl                      string      `json:"token_ttl,omitempty"`
+	TokenMaxTtl                   string      `json:"token_max_ttl,omitempty"`
+	TokenBoundCidrs               []string    `json:"token_bound_cidrs,omitempty"`
+	TokenExplicitMaxTtl           string      `json:"token_explicit_max_ttl,omitempty"`
+	TokenNoDefaultPolicy          bool        `json:"token_no_default_policy,omitempty"`
+	TokenNumUses                  int         `json:"token_num_uses,omitempty"`
+	TokenPeriod                   string      `json:"token_period,omitempty"`
+	TokenType                     string      `json:"token_type,omitempty"`
 }
 
 type policyTemplateInput struct {
@@ -311,18 +311,33 @@ func addOrUpdatePolicy(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, c
 }
 
 func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta) {
-	for _, r := range kubernetesAuth.Roles {
+	for i, r := range kubernetesAuth.Roles {
 		if r.Name == metadata.Name {
+			if BoundRolesToAllNamespaces {
+				kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = []string{"*"}
+			} else {
+				switch r.BoundServiceAccountNamespaces.(type) {
+				case string:
+					kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = []string{metadata.Name}
+				case []interface{}:
+					for _, n := range r.BoundServiceAccountNamespaces.([]interface{}) {
+						if n.(string) == metadata.Namespace {
+							return
+						}
+					}
+					kubernetesAuth.Roles[i].BoundServiceAccountNamespaces = append(kubernetesAuth.Roles[i].BoundServiceAccountNamespaces.([]interface{}), metadata.Namespace)
+				}
+			}
 			return
 		}
 	}
 	newRole := &Role{
 		BoundServiceAccountNames: metadata.Name,
-		BoundServiceAccountNamespaces: func(namespace string) string {
+		BoundServiceAccountNamespaces: func(namespace string) []string {
 			if BoundRolesToAllNamespaces {
-				return "*"
+				return []string{"*"}
 			} else {
-				return namespace
+				return []string{namespace}
 			}
 		}(metadata.Namespace),
 		Name:          metadata.Name,
