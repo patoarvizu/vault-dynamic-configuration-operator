@@ -30,7 +30,7 @@ func setup(t *testing.T, ctx *test.TestCtx) {
 	}
 }
 
-func createServiceAccount(name string, extraAnnotations map[string]string, ctx *test.TestCtx) error {
+func createServiceAccount(name string, namespace string, extraAnnotations map[string]string, ctx *test.TestCtx) error {
 	annotations := map[string]string{"vault.patoarvizu.dev/auto-configure": "true"}
 	for k, v := range extraAnnotations {
 		annotations[k] = v
@@ -38,14 +38,23 @@ func createServiceAccount(name string, extraAnnotations map[string]string, ctx *
 	var opertatorTestServiceAccount = &apiv1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
-			Namespace:   "default",
+			Namespace:   namespace,
 			Annotations: annotations,
 		},
 	}
 	return framework.Global.Client.Create(context.TODO(), opertatorTestServiceAccount, &framework.CleanupOptions{TestContext: ctx, Timeout: time.Second * 60, RetryInterval: time.Second * 1})
 }
 
-func testVaultRole(name string, namespace string, t *testing.T) {
+func namespaceIsInAllowedList(namespace string, allowedNamespaces []string) bool {
+	for _, ns := range allowedNamespaces {
+		if ns == namespace {
+			return true
+		}
+	}
+	return false
+}
+
+func testVaultRole(name string, namespaces []string, t *testing.T) {
 	vaultCR := &bankvaultsv1alpha1.Vault{}
 	bvConfig := vdc.BankVaultsConfig{}
 	err := wait.Poll(time.Second*2, time.Second*20, func() (done bool, err error) {
@@ -62,8 +71,13 @@ func testVaultRole(name string, namespace string, t *testing.T) {
 		if wErr != nil {
 			return false, nil
 		}
-		if role.BoundServiceAccountNames != name || role.BoundServiceAccountNamespaces[0] != namespace || role.TokenTtl != "5m" {
+		if role.BoundServiceAccountNames != name || role.TokenTtl != "5m" {
 			t.Errorf("Test role '%s' is not configured correctly", name)
+		}
+		for _, ns := range namespaces {
+			if !namespaceIsInAllowedList(ns, role.BoundServiceAccountNamespaces) {
+				t.Errorf("Namespace %s is not in list of role bound namespaces", ns)
+			}
 		}
 		if role.TokenPolicies[0] != name {
 			t.Errorf("Test role '%s' policies are not configured correctly", name)
