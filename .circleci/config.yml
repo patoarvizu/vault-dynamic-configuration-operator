@@ -66,8 +66,8 @@ jobs:
             k3d create --image rancher/k3s:v1.0.0 -t=0
             export KUBECONFIG="$(k3d get-kubeconfig)"
             k3d import-images patoarvizu/vault-dynamic-configuration-operator:latest
-            kubectl apply -f test/manifests/vault/vault-crd.yaml
-            kubectl apply -f test/manifests/vault/vault-cluster.yaml
+            kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/first_set/vault/vault-operator.yaml
+            kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/first_set/vault/vault-cluster-kubernetes-and-db.yaml
             kubectl apply -f test/manifests/namespaces/test.yaml
             kubectl apply -f deploy/
             operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestSingleNamespace'
