@@ -126,7 +126,11 @@ func main() {
 	}
 
 	services := []*v1.Service{service}
-	_, err = metrics.CreateServiceMonitors(cfg, namespace, services)
+	operatorNs, err := k8sutil.GetOperatorNamespace()
+	if err != nil {
+		log.Info("Could not get operator namespace", "error", err.Error())
+	}
+	_, err = metrics.CreateServiceMonitors(cfg, operatorNs, services)
 	if err != nil {
 		log.Info("Could not create ServiceMonitor object", "error", err.Error())
 		if err == metrics.ErrServiceMonitorNotPresent {
