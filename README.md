@@ -12,6 +12,7 @@
         - [Operator command-line flags](#operator-command-line-flags)
         - [Operator permissions](#operator-permissions)
     - [Vault agent sidecar auto-inject mutating webhook](#vault-agent-sidecar-auto-inject-mutating-webhook)
+    - [Monitoring](#monitoring)
     - [For security nerds](#for-security-nerds)
         - [Docker images are signed and published to Docker Hub's Notary server](#docker-images-are-signed-and-published-to-docker-hubs-notary-server)
         - [Docker images are labeled with Git and GPG metadata](#docker-images-are-labeled-with-git-and-gpg-metadata)
@@ -68,6 +69,10 @@ Since the operator is **not** operating on the Vault cluster directly, it doesn'
 ## Vault agent sidecar auto-inject mutating webhook
 
 The [`vault-agent-auto-inject-webhook`](https://github.com/patoarvizu/vault-agent-auto-inject-webhook) is a companion component to this operator. It can be deployed as a Kubernetes [Mutating Webhook](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/) to automatically inject a Vault agent sidecar into `Pod`s, using annotations. Read the component's documentation on how to deploy it.
+
+## Monitoring
+
+If your Kubernetes cluster is running the Prometheus [operator](https://github.com/coreos/prometheus-operator), this operator will automatically create an additional `Service` called `vault-dynamic-configuration-operator-metrics` and a corresponding `ServiceMonitor` of the same name. This monitor will scrape the operator for metrics on two different ports. Port 8383 will post general metrics about the running process, while port 8686 will post metrics about the custom resources managed by the operator. More information can be found on the Operator SDK [website](https://sdk.operatorframework.io/docs/golang/monitoring/prometheus/).
 
 ## For security nerds
 
