@@ -59,7 +59,7 @@ jobs:
       - run:
           name: Install k3d
           command: |
-            wget -q -O - https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG=${K3D_VERSION} bash
+            wget -q -O - https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG=v${K3D_VERSION} bash
       - run:
           name: Run all tests
           command: |
