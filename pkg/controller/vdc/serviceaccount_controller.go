@@ -197,7 +197,6 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	if val, ok := instance.Annotations[AnnotationPrefix+"/"+AutoConfigureAnnotation]; !ok || val != "true" {
 		return reconcile.Result{}, nil
 	}
-	reqLogger.Info("Configuring ServiceAccount for Vault authentication", "ServiceAccount", instance.ObjectMeta.Name, "Namespace", instance.ObjectMeta.Namespace)
 
 	vaultConfig := &bankvaultsv1alpha1.Vault{}
 	ns, _ := k8sutil.GetOperatorNamespace()
@@ -235,7 +234,6 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	if !ok {
 		return reconcile.Result{}, nil
 	}
-	reqLogger.Info("Configuring ServiceAccount for dynamic database secrets", "ServiceAccount", instance.ObjectMeta.Name, "Namespace", instance.ObjectMeta.Namespace, "TargetDB", targetDb)
 	err = addOrUpdateDBRole(&bvConfig, instance.ObjectMeta, *configMap, targetDb)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -279,6 +277,7 @@ func addOrUpdateDBRole(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, c
 			return nil
 		}
 	}
+	log.Info("Configuring ServiceAccount for dynamic database secrets", "ServiceAccount", metadata.Name, "Namespace", metadata.Namespace, "TargetDB", targetDb)
 	newDbRole := &DBRole{
 		Name:               metadata.Name,
 		DbName:             targetDb,
@@ -343,6 +342,7 @@ func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta)
 			return
 		}
 	}
+	log.Info("Configuring ServiceAccount for Vault authentication", "ServiceAccount", metadata.Name, "Namespace", metadata.Namespace)
 	newRole := &Role{
 		BoundServiceAccountNames: metadata.Name,
 		BoundServiceAccountNamespaces: func(namespace string) []string {
