@@ -13,7 +13,7 @@ jobs:
       OPERATOR_SDK_VERSION: 0.15.2
       NOTARY_VERSION: 0.6.1
       KUBECTL_VERSION: 1.12.0
-      K3D_VERSION: 1.6.0
+      K3D_VERSION: 3.0.0
       GOPATH: /home/circleci/go
       GO111MODULE: "on"
     working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
@@ -63,9 +63,9 @@ jobs:
       - run:
           name: Run all tests
           command: |
-            k3d create --image rancher/k3s:v1.0.0 -t=0
-            export KUBECONFIG="$(k3d get-kubeconfig)"
-            k3d import-images patoarvizu/vault-dynamic-configuration-operator:latest
+            export KUBECONFIG=~/.k3d/k3s-default-config
+            k3d cluster create --image rancher/k3s:v1.0.0 --wait --switch-context=false
+            k3d image import patoarvizu/vault-dynamic-configuration-operator:latest
             kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/prometheus-operator/crds.yaml
             kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-operator.yaml
             kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-cluster-kubernetes-and-db.yaml
