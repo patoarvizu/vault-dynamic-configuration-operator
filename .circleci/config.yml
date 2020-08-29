@@ -10,7 +10,7 @@ jobs:
       image: ubuntu-1604:202007-01
     environment:
       GOLANG_VERSION: 1.13.8
-      OPERATOR_SDK_VERSION: 0.16.0
+      OPERATOR_SDK_VERSION: 0.17.2
       NOTARY_VERSION: 0.6.1
       KUBECTL_VERSION: 1.12.0
       K3D_VERSION: 3.0.0
@@ -72,10 +72,10 @@ jobs:
             kubectl apply -f test/manifests/namespaces/test.yaml
             kubectl apply -f deploy/
             sleep 60
-            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestMonitoringObjectsCreated'
-            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestSingleNamespace'
+            operator-sdk test local ./test/e2e/ --operator-namespace "vault" --go-test-flags '-v -run TestMonitoringObjectsCreated'
+            operator-sdk test local ./test/e2e/ --operator-namespace "vault" --go-test-flags '-v -run TestSingleNamespace'
             kubectl -n vault patch deployment vault-dynamic-configuration-operator --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/command/-", "value":"--bound-roles-to-all-namespaces"}]'
-            operator-sdk test local ./test/e2e/ --namespace "vault" --go-test-flags '-v -run TestAllNamespaces'
+            operator-sdk test local ./test/e2e/ --operator-namespace "vault" --go-test-flags '-v -run TestAllNamespaces'
       - run:
           name: Install notary
           command: |

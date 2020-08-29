@@ -2,13 +2,13 @@ module github.com/patoarvizu/vault-dynamic-configuration-operator
 
 require (
 	github.com/banzaicloud/bank-vaults v0.0.0-20200310211418-ce974071071b
-	github.com/coreos/prometheus-operator v0.34.0
-	github.com/operator-framework/operator-sdk v0.16.0
+	github.com/coreos/prometheus-operator v0.38.0
+	github.com/operator-framework/operator-sdk v0.17.2
 	github.com/spf13/pflag v1.0.5
-	k8s.io/api v0.17.2
-	k8s.io/apimachinery v0.17.2
+	k8s.io/api v0.17.4
+	k8s.io/apimachinery v0.17.4
 	k8s.io/client-go v12.0.0+incompatible
-	sigs.k8s.io/controller-runtime v0.4.0
+	sigs.k8s.io/controller-runtime v0.5.2
 )
 
 // Pinned to kubernetes-1.16.2
@@ -39,5 +39,7 @@ replace (
 replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
 
 replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved
+
+replace github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM
 
 go 1.13
