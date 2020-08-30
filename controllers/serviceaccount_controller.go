@@ -1,4 +1,20 @@
-package vdc
+/*
+
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controllers
 
 import (
 	"bytes"
@@ -6,15 +22,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"strings"
 	"text/template"
 
-	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
+	"github.com/go-logr/logr"
+	bankvaultsv1alpha1 "github.com/patoarvizu/vault-dynamic-configuration-operator/api/vault/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -33,88 +52,12 @@ var (
 	TokenTtl                       string
 )
 
+var log = logf.Log.WithName("controller_vdc")
+
 const defaultPolicyTemplate = "path \"secret/{{ .Name }}\" { capabilities = [\"read\"] }"
 const defaultDynamicDBUserCreationStatement = "CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT ALL ON *.* TO '{{name}}'@'%';"
 const defaultDbDefaultTtl = "1h"
 const defaultDbMaxTtl = "24h"
-
-var log = logf.Log.WithName("controller_serviceaccount")
-
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
-}
-
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileServiceAccount{client: mgr.GetClient(), scheme: mgr.GetScheme()}
-}
-
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	c, err := controller.New("serviceaccount-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
-
-	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
-	err = c.Watch(&source.Kind{
-		Type: &bankvaultsv1alpha1.Vault{}},
-		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(func(h handler.MapObject) []reconcile.Request {
-				return getRequestsForAllAnnotatedServiceAccounts(mgr)
-			}),
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	err = c.Watch(&source.Kind{
-		Type: &corev1.ConfigMap{}},
-		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(func(h handler.MapObject) []reconcile.Request {
-				return getRequestsForAllAnnotatedServiceAccounts(mgr)
-			}),
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getRequestsForAllAnnotatedServiceAccounts(mgr manager.Manager) []reconcile.Request {
-	namespaces := &corev1.NamespaceList{}
-	mgr.GetClient().List(context.TODO(), namespaces)
-	requests := []reconcile.Request{}
-	for _, ns := range namespaces.Items {
-		serviceAccounts := &corev1.ServiceAccountList{}
-		mgr.GetClient().List(context.TODO(), serviceAccounts, client.InNamespace(ns.ObjectMeta.Name))
-		for _, sa := range serviceAccounts.Items {
-			if val, ok := sa.ObjectMeta.Annotations[AnnotationPrefix+"/"+AutoConfigureAnnotation]; ok {
-				if val == "true" {
-					requests = append(requests, reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      sa.ObjectMeta.Name,
-							Namespace: sa.ObjectMeta.Namespace,
-						},
-					})
-				}
-			}
-		}
-	}
-	return requests
-}
-
-var _ reconcile.Reconciler = &ReconcileServiceAccount{}
-
-type ReconcileServiceAccount struct {
-	client client.Client
-	scheme *runtime.Scheme
-}
 
 type BankVaultsConfig struct {
 	Auth     []Auth   `json:"auth"`
@@ -182,11 +125,23 @@ type policyTemplateInput struct {
 	Namespace string
 }
 
-func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+// ServiceAccountReconciler reconciles a ServiceAccount object
+type ServiceAccountReconciler struct {
+	client.Client
+	Log    logr.Logger
+	Scheme *runtime.Scheme
+}
+
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
+// +kubebuilder:rbac:groups=vault.banzaicloud.com,resources=vaults,verbs=get;list;watch;create;update;patch
+
+func (r *ServiceAccountReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	reqLogger := log.WithValues("Request.Namespace", req.Namespace, "Request.Name", req.Name)
 
 	instance := &corev1.ServiceAccount{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	err := r.Client.Get(context.TODO(), req.NamespacedName, instance)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -199,8 +154,8 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	}
 
 	vaultConfig := &bankvaultsv1alpha1.Vault{}
-	ns, _ := k8sutil.GetOperatorNamespace()
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: TargetVaultName, Namespace: ns}, vaultConfig)
+	ns, _ := getOperatorNamespace()
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: TargetVaultName, Namespace: ns}, vaultConfig)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -211,9 +166,9 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 	configMap := &corev1.ConfigMap{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "vault-dynamic-configuration", Namespace: "vault"}, configMap)
 	if err != nil {
-		reqLogger.Info("vault-dynamic-configuration ConfigMap not found, using defaults")
+		reqLogger.V(1).Info("vault-dynamic-configuration ConfigMap not found, using defaults")
 	}
 	err = addOrUpdatePolicy(&bvConfig, instance.ObjectMeta, *configMap)
 	if err != nil {
@@ -224,11 +179,12 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 	addOrUpdateKubernetesRole(kubernetesAuth, instance.ObjectMeta)
+	reqLogger.V(1).Info("Added Kubernetes role")
 	err = updateKubernetesConfiguration(bvConfig, vaultConfig)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	r.client.Update(context.TODO(), vaultConfig)
+	r.Client.Update(context.TODO(), vaultConfig)
 
 	targetDb, ok := instance.Annotations[AnnotationPrefix+"/"+DynamicDBCredentialsAnnotation]
 	if !ok {
@@ -242,8 +198,78 @@ func (r *ReconcileServiceAccount) Reconcile(request reconcile.Request) (reconcil
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	r.client.Update(context.TODO(), vaultConfig)
+	r.Client.Update(context.TODO(), vaultConfig)
 	return reconcile.Result{}, nil
+}
+
+func (r *ServiceAccountReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	c, err := controller.New("serviceaccount-controller", mgr, controller.Options{Reconciler: r})
+	if err != nil {
+		return err
+	}
+
+	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return err
+	}
+
+	err = c.Watch(&source.Kind{
+		Type: &bankvaultsv1alpha1.Vault{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(h handler.MapObject) []reconcile.Request {
+				return getRequestsForAllAnnotatedServiceAccounts(mgr)
+			}),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	err = c.Watch(&source.Kind{
+		Type: &corev1.ConfigMap{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(h handler.MapObject) []reconcile.Request {
+				return getRequestsForAllAnnotatedServiceAccounts(mgr)
+			}),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getOperatorNamespace() (string, error) {
+	nsBytes, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return "", err
+	}
+	ns := strings.TrimSpace(string(nsBytes))
+	return ns, nil
+}
+
+func getRequestsForAllAnnotatedServiceAccounts(mgr manager.Manager) []reconcile.Request {
+	namespaces := &corev1.NamespaceList{}
+	mgr.GetClient().List(context.TODO(), namespaces)
+	requests := []reconcile.Request{}
+	for _, ns := range namespaces.Items {
+		serviceAccounts := &corev1.ServiceAccountList{}
+		mgr.GetClient().List(context.TODO(), serviceAccounts, client.InNamespace(ns.ObjectMeta.Name))
+		for _, sa := range serviceAccounts.Items {
+			if val, ok := sa.ObjectMeta.Annotations[AnnotationPrefix+"/"+AutoConfigureAnnotation]; ok {
+				if val == "true" {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      sa.ObjectMeta.Name,
+							Namespace: sa.ObjectMeta.Namespace,
+						},
+					})
+				}
+			}
+		}
+	}
+	return requests
 }
 
 func addOrUpdateDBRole(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, configMap corev1.ConfigMap, targetDb string) error {
@@ -277,7 +303,7 @@ func addOrUpdateDBRole(bvConfig *BankVaultsConfig, metadata metav1.ObjectMeta, c
 			return nil
 		}
 	}
-	log.Info("Configuring ServiceAccount for dynamic database secrets", "ServiceAccount", metadata.Name, "Namespace", metadata.Namespace, "TargetDB", targetDb)
+	log.V(1).Info("Configuring ServiceAccount for dynamic database secrets", "ServiceAccount", metadata.Name, "Namespace", metadata.Namespace, "TargetDB", targetDb)
 	newDbRole := &DBRole{
 		Name:               metadata.Name,
 		DbName:             targetDb,
@@ -342,7 +368,7 @@ func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta)
 			return
 		}
 	}
-	log.Info("Configuring ServiceAccount for Vault authentication", "ServiceAccount", metadata.Name, "Namespace", metadata.Namespace)
+	log.V(1).Info("Configuring ServiceAccount for Vault authentication", "ServiceAccount", metadata.Name, "Namespace", metadata.Namespace)
 	newRole := &Role{
 		BoundServiceAccountNames: metadata.Name,
 		BoundServiceAccountNamespaces: func(namespace string) []string {

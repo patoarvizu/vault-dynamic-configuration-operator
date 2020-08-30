@@ -10,7 +10,7 @@ jobs:
       image: ubuntu-1604:202007-01
     environment:
       GOLANG_VERSION: 1.13.8
-      OPERATOR_SDK_VERSION: 0.18.2
+      OPERATOR_SDK_VERSION: 0.19.1
       NOTARY_VERSION: 0.6.1
       KUBECTL_VERSION: 1.12.0
       K3D_VERSION: 3.0.0
@@ -38,7 +38,7 @@ jobs:
       - run:
           name: Build image
           command: |
-            operator-sdk build patoarvizu/vault-dynamic-configuration-operator:latest
+            make docker-build
       - save_cache:
           key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
           paths:
@@ -70,12 +70,12 @@ jobs:
             kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-operator.yaml
             kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-cluster-kubernetes-and-db.yaml
             kubectl apply -f test/manifests/namespaces/test.yaml
-            kubectl apply -f deploy/
+            make deploy
             sleep 60
-            operator-sdk test local ./test/e2e/ --operator-namespace "vault" --go-test-flags '-v -run TestMonitoringObjectsCreated'
-            operator-sdk test local ./test/e2e/ --operator-namespace "vault" --go-test-flags '-v -run TestSingleNamespace'
-            kubectl -n vault patch deployment vault-dynamic-configuration-operator --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/command/-", "value":"--bound-roles-to-all-namespaces"}]'
-            operator-sdk test local ./test/e2e/ --operator-namespace "vault" --go-test-flags '-v -run TestAllNamespaces'
+            # operator-sdk test local ./test/e2e/ --operator-namespace "vault" --go-test-flags '-v -run TestMonitoringObjectsCreated'
+            go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Single namespace"
+            kubectl -n vault patch deployment controller-manager --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--bound-roles-to-all-namespaces"}]'
+            go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="All namespaces"
       - run:
           name: Install notary
           command: |
@@ -85,20 +85,21 @@ jobs:
       - run:
           name: Build operator
           command: |
-            docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
-            echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
-            export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
-            notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
-            export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
-            OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
-            operator-sdk build patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 --image-build-args "$OPERATOR_BUILD_ARGS"
-            export DOCKER_CONTENT_TRUST=1
-            VERSION=${CIRCLE_TAG:-latest}
-            docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:latest
-            docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:$VERSION
-            docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1
-            docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION
-            docker push patoarvizu/vault-dynamic-configuration-operator:latest
+            echo "Temporarily comment out"
+            # docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+            # echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
+            # export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
+            # notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
+            # export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
+            # OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+            # operator-sdk build patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 --image-build-args "$OPERATOR_BUILD_ARGS"
+            # export DOCKER_CONTENT_TRUST=1
+            # VERSION=${CIRCLE_TAG:-latest}
+            # docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:latest
+            # docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:$VERSION
+            # docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1
+            # docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION
+            # docker push patoarvizu/vault-dynamic-configuration-operator:latest
 
 workflows:
   version: 2

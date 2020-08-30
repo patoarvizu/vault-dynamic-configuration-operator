@@ -1,20 +1,18 @@
 module github.com/patoarvizu/vault-dynamic-configuration-operator
 
+go 1.13
+
 require (
-	github.com/banzaicloud/bank-vaults v0.0.0-20200310211418-ce974071071b
-	github.com/coreos/prometheus-operator v0.38.1-0.20200424145508-7e176fda06cc
-	github.com/operator-framework/operator-sdk v0.18.2
-	github.com/spf13/pflag v1.0.5
-	k8s.io/api v0.18.2
-	k8s.io/apimachinery v0.18.2
-	k8s.io/client-go v12.0.0+incompatible
+	github.com/Masterminds/semver/v3 v3.1.0
+	github.com/coreos/prometheus-operator v0.41.1
+	github.com/go-logr/logr v0.1.0
+	github.com/google/martian v2.1.0+incompatible
+	github.com/onsi/ginkgo v1.11.0
+	github.com/onsi/gomega v1.8.1
+	github.com/spf13/cast v1.3.0
+	k8s.io/api v0.18.3
+	k8s.io/apimachinery v0.18.3
+	k8s.io/client-go v0.18.3
+	k8s.io/utils v0.0.0-20200414100711-2df71ebbae66
 	sigs.k8s.io/controller-runtime v0.6.0
 )
-
-replace github.com/openshift/api => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad // Required until https://github.com/operator-framework/operator-lifecycle-manager/pull/1241 is resolved
-
-replace github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM
-
-replace k8s.io/client-go => k8s.io/client-go v0.18.2 // Required by prometheus-operator
-
-go 1.13
