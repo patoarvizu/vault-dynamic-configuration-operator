@@ -39,10 +39,6 @@ jobs:
           name: Build image
           command: |
             make docker-build
-      - save_cache:
-          key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
-          paths:
-            - /home/circleci/go/pkg/mod/cache
       - snyk/scan:
           docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
           fail-on-issues: true
@@ -76,6 +72,10 @@ jobs:
             go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Single namespace"
             kubectl -n vault patch deployment controller-manager --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--bound-roles-to-all-namespaces"}]'
             go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="All namespaces"
+      - save_cache:
+          key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
+          paths:
+            - /home/circleci/go/pkg/mod/cache
       - run:
           name: Install notary
           command: |
