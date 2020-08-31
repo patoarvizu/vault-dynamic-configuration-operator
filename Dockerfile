@@ -1,5 +1,7 @@
 # Build the manager binary
 FROM golang:1.13 as builder
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -15,11 +17,27 @@ COPY api/ api/
 COPY controllers/ controllers/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARM=$(if [ "$TARGETVARIANT" = "v7" ]; then echo "7"; fi) GOARCH=$TARGETARCH GO111MODULE=on go build -a -o manager main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
+
+ARG GIT_COMMIT="unspecified"
+LABEL GIT_COMMIT=$GIT_COMMIT
+
+ARG GIT_TAG=""
+LABEL GIT_TAG=$GIT_TAG
+
+ARG COMMIT_TIMESTAMP="unspecified"
+LABEL COMMIT_TIMESTAMP=$COMMIT_TIMESTAMP
+
+ARG AUTHOR_EMAIL="unspecified"
+LABEL AUTHOR_EMAIL=$AUTHOR_EMAIL
+
+ARG SIGNATURE_KEY="undefined"
+LABEL SIGNATURE_KEY=$SIGNATURE_KEY
+
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER nonroot:nonroot
