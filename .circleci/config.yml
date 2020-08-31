@@ -3,10 +3,9 @@ version: 2.1
 orbs:
   snyk: snyk/snyk@0.0.8
 
-jobs:
-  build:
+executors:
+  vm:
     machine:
-      enabled: true
       image: ubuntu-1604:202007-01
     environment:
       GOLANG_VERSION: 1.13.8
@@ -18,111 +17,149 @@ jobs:
       GO111MODULE: "on"
       DOCKER_CLI_EXPERIMENTAL: enabled
     working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
+
+jobs:
+  build:
+    executor: vm
     steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
-      - run:
-          name: Install golang
-          command: |
-            sudo rm -rf /usr/local/go
-            curl -Lo go.linux-amd64.tar.gz "https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz"
-            sudo tar -C /usr/local -xzf go.linux-amd64.tar.gz
-            mkdir -p ${HOME}/go/bin
-            echo 'export PATH="$GOPATH/bin:$PATH"' >> "${BASH_ENV}"
-      - run:
-          name: Install operator-sdk
-          command: |
-            curl -L https://github.com/operator-framework/operator-sdk/releases/download/v${OPERATOR_SDK_VERSION}/operator-sdk-v${OPERATOR_SDK_VERSION}-x86_64-linux-gnu -o ${HOME}/go/bin/operator-sdk
-            chmod +x ${HOME}/go/bin/operator-sdk
-      - run:
-          name: Build image
-          command: |
-            make docker-build
-      - snyk/scan:
-          docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
-          fail-on-issues: true
-          project: patoarvizu/vault-dynamic-configuration-operator
-          severity-threshold: low
-      - run:
-          name: Install kubectl
-          command: |
-            curl -Lo kubectl "https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-            chmod +x kubectl
-            sudo mv kubectl /usr/local/bin/
-            mkdir -p "${HOME}/.kube"
-            touch "${HOME}/.kube/config"
-      - run:
-          name: Install k3d
-          command: |
-            wget -q -O - https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG=v${K3D_VERSION} bash
-      - run:
-          name: Run all tests
-          command: |
-            export KUBECONFIG=~/.k3d/k3s-default-config
-            k3d cluster create --image rancher/k3s:v1.0.0 --wait
-            k3d image import patoarvizu/vault-dynamic-configuration-operator:latest
-            kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/prometheus-operator/crds.yaml
-            kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-operator.yaml
-            kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-cluster-kubernetes-and-db.yaml
-            kubectl apply -f test/manifests/namespaces/test.yaml
-            make deploy
-            sleep 60
-            go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Single namespace"
-            kubectl -n vault patch deployment controller-manager --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--bound-roles-to-all-namespaces"}]'
-            go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="All namespaces"
-      - save_cache:
-          key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
-          paths:
-            - /home/circleci/go/pkg/mod/cache
-      - run:
-          name: Install notary
-          command: |
-            curl -L https://github.com/theupdateframework/notary/releases/download/v${NOTARY_VERSION}/notary-Linux-amd64 -o notary
-            chmod +x notary
-            sudo mv notary /usr/local/bin
-      - run:
-          name: Build operator
-          command: |
-            sudo apt-get update
-            sudo apt-get install qemu-user -y
-            docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-            docker buildx create --name cci-builder --use
-            docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
-            echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
-            export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
-            notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
-            export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
-            OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
-            export DOCKER_CONTENT_TRUST=1
-            VERSION=${CIRCLE_TAG:-latest}
-            docker buildx build --progress=plain --platform=linux/amd64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest -t patoarvizu/vault-dynamic-configuration-operator:latest-amd64 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
-            docker push patoarvizu/vault-dynamic-configuration-operator:latest
-            docker push patoarvizu/vault-dynamic-configuration-operator:latest-amd64
-            docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64
-            docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
-            docker buildx build --progress=plain --platform=linux/arm64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
-            docker buildx build --progress=plain --platform=linux/arm/v7 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
-            docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
-            docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
-            docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
-            docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm7
-            docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
-            docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
-            # docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:latest
-            # docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:$VERSION
-            # docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1
-            # docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION
-            # docker push patoarvizu/vault-dynamic-configuration-operator:latest
-          no_output_timeout: 30m
+    - checkout
+    - restore_cache:
+        keys:
+          - vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
+    - run:
+        name: Install golang
+        command: |
+          sudo rm -rf /usr/local/go
+          curl -Lo go.linux-amd64.tar.gz "https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz"
+          sudo tar -C /usr/local -xzf go.linux-amd64.tar.gz
+          mkdir -p ${HOME}/go/bin
+          echo 'export PATH="$GOPATH/bin:$PATH"' >> "${BASH_ENV}"
+    - run:
+        name: Install operator-sdk
+        command: |
+          curl -L https://github.com/operator-framework/operator-sdk/releases/download/v${OPERATOR_SDK_VERSION}/operator-sdk-v${OPERATOR_SDK_VERSION}-x86_64-linux-gnu -o ${HOME}/go/bin/operator-sdk
+          chmod +x ${HOME}/go/bin/operator-sdk
+    - run:
+        name: Build image
+        command: |
+          make docker-build
+    - snyk/scan:
+        docker-image-name: patoarvizu/vault-dynamic-configuration-operator:latest
+        fail-on-issues: true
+        project: patoarvizu/vault-dynamic-configuration-operator
+        severity-threshold: low
+    - run:
+        name: Install kubectl
+        command: |
+          curl -Lo kubectl "https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+          mkdir -p "${HOME}/.kube"
+          touch "${HOME}/.kube/config"
+    - run:
+        name: Install k3d
+        command: |
+          wget -q -O - https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG=v${K3D_VERSION} bash
+    - run:
+        name: Run all tests
+        command: |
+          export KUBECONFIG=~/.k3d/k3s-default-config
+          k3d cluster create --image rancher/k3s:v1.0.0 --wait
+          k3d image import patoarvizu/vault-dynamic-configuration-operator:latest
+          kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/prometheus-operator/crds.yaml
+          kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-operator.yaml
+          kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-cluster-kubernetes-and-db.yaml
+          kubectl apply -f test/manifests/namespaces/test.yaml
+          make deploy
+          sleep 60
+          go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Single namespace"
+          kubectl -n vault patch deployment controller-manager --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--bound-roles-to-all-namespaces"}]'
+          go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="All namespaces"
+    - save_cache:
+        key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
+        paths:
+          - /home/circleci/go/pkg/mod/cache
+    - run:
+        name: Install notary
+        command: |
+          curl -L https://github.com/theupdateframework/notary/releases/download/v${NOTARY_VERSION}/notary-Linux-amd64 -o notary
+          chmod +x notary
+          sudo mv notary /usr/local/bin
+    - run:
+        name: Build operator
+        command: |
+          docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+          echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
+          export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
+          notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
+          export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
+          OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+          export DOCKER_CONTENT_TRUST=1
+          VERSION=${CIRCLE_TAG:-latest}
+          docker buildx build --progress=plain --platform=linux/amd64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-amd64 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
+          docker push patoarvizu/vault-dynamic-configuration-operator:latest-amd64
+          docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64
+          docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
+        no_output_timeout: 30m
+
+  push-multi-arch:
+    executor: vm
+    steps:
+    - checkout
+    - run:
+        name: Install notary
+        command: |
+          curl -L https://github.com/theupdateframework/notary/releases/download/v0.6.1/notary-Linux-amd64 -o notary
+          chmod +x notary
+          sudo mv notary /usr/local/bin
+    - run:
+        name: Push multi-arch images
+        command: |
+          sudo apt-get update
+          sudo apt-get install qemu-user -y
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+          docker buildx create --name cci-builder --use
+          docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+          echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
+          export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
+          notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
+          export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
+          OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+          export DOCKER_CONTENT_TRUST=1
+          VERSION=${CIRCLE_TAG:-latest}
+          docker buildx build --progress=plain --platform=linux/arm64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+          docker buildx build --progress=plain --platform=linux/arm/v7 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
+          docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm7
+          docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
+          docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
+          docker buildx build --progress=plain --platform=linux/amd64,linux/arm64,linux/arm/v7 --push $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION
+          DIGEST=$(docker buildx imagetools inspect patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 | grep Digest | cut -d':' -f3)
+          LENGTH=$(( $(docker buildx imagetools inspect patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 --raw | wc -c) - 1 ))
+          export NOTARY_AUTH=$(echo $DOCKER_HUB_USER:$DOCKER_HUB_ACCESS_TOKEN | base64)
+          notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator latest $LENGTH --sha256 $DIGEST -r targets/releases
+          notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator $CIRCLE_SHA1 $LENGTH --sha256 $DIGEST -r targets/releases
+          notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator $VERSION $LENGTH --sha256 $DIGEST -r targets/releases
+        no_output_timeout: 30m
 
 workflows:
   version: 2
   build-operator:
     jobs:
-      - build:
-          context: authentication-tokens
-          filters:
-            tags:
-              only: /^v\d+\.\d+.\d+$/
+    - build:
+        context: authentication-tokens
+        filters:
+          tags:
+            only: /^v\d+\.\d+.\d+$/
+    - push-multi-arch:
+        requires:
+        - build
+        context: authentication-tokens
+        filters:
+          # branches:
+          #   ignore: /^.*$/
+          #   only: /^master$/
+          tags:
+            only: /^v\d+\.\d+.\d+$/
