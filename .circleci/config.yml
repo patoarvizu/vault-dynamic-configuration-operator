@@ -69,7 +69,6 @@ jobs:
             kubectl apply -f test/manifests/namespaces/test.yaml
             make deploy
             sleep 60
-            # operator-sdk test local ./test/e2e/ --operator-namespace "vault" --go-test-flags '-v -run TestMonitoringObjectsCreated'
             go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Single namespace"
             kubectl -n vault patch deployment controller-manager --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--bound-roles-to-all-namespaces"}]'
             go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="All namespaces"
@@ -103,6 +102,14 @@ jobs:
             docker push patoarvizu/vault-dynamic-configuration-operator:latest-amd64
             docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64
             docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
+            docker buildx build --progress=plain --platform=linux/arm64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+            docker buildx build --progress=plain --platform=linux/arm/v7 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
+            docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+            docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
+            docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+            docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm7
+            docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
+            docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
             # docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:latest
             # docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:$VERSION
             # docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1
