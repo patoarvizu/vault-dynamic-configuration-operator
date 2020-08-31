@@ -16,6 +16,7 @@ jobs:
       K3D_VERSION: 3.0.0
       GOPATH: /home/circleci/go
       GO111MODULE: "on"
+      DOCKER_CLI_EXPERIMENTAL: enabled
     working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
     steps:
       - checkout
@@ -85,16 +86,23 @@ jobs:
       - run:
           name: Build operator
           command: |
-            echo "Temporarily comment out"
-            # docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
-            # echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
-            # export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
-            # notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
-            # export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
-            # OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
-            # operator-sdk build patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 --image-build-args "$OPERATOR_BUILD_ARGS"
-            # export DOCKER_CONTENT_TRUST=1
-            # VERSION=${CIRCLE_TAG:-latest}
+            sudo apt-get update
+            sudo apt-get install qemu-user -y
+            docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+            docker buildx create --name cci-builder --use
+            docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+            echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
+            export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
+            notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
+            export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
+            OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+            export DOCKER_CONTENT_TRUST=1
+            VERSION=${CIRCLE_TAG:-latest}
+            docker buildx build --progress=plain --platform=linux/amd64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest -t patoarvizu/vault-dynamic-configuration-operator:latest-amd64 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
+            docker push patoarvizu/vault-dynamic-configuration-operator:latest
+            docker push patoarvizu/vault-dynamic-configuration-operator:latest-amd64
+            docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64
+            docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
             # docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:latest
             # docker tag patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 patoarvizu/vault-dynamic-configuration-operator:$VERSION
             # docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1
