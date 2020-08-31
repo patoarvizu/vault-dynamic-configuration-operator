@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	bankvaultsv1alpha1 "github.com/patoarvizu/vault-dynamic-configuration-operator/api/vault/v1alpha1"
 	"github.com/patoarvizu/vault-dynamic-configuration-operator/controllers"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

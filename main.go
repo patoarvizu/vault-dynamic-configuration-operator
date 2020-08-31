@@ -21,7 +21,7 @@ import (
 	"flag"
 	"os"
 
-	bankvaultsv1alpha1 "github.com/patoarvizu/vault-dynamic-configuration-operator/api/vault/v1alpha1"
+	bankvaultsv1alpha1 "github.com/banzaicloud/bank-vaults/operator/pkg/apis/vault/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
