@@ -5,19 +5,20 @@
 <!-- TOC -->
 
 - [Vault dynamic configuration Operator](#vault-dynamic-configuration-operator)
-    - [Intro](#intro)
-    - [Auto-configure roles and policies](#auto-configure-roles-and-policies)
-    - [Auto-configure dynamic database credentials](#auto-configure-dynamic-database-credentials)
-    - [Configuration](#configuration)
-        - [Operator command-line flags](#operator-command-line-flags)
-        - [Operator permissions](#operator-permissions)
-    - [Vault agent sidecar auto-inject mutating webhook](#vault-agent-sidecar-auto-inject-mutating-webhook)
-    - [Monitoring](#monitoring)
-    - [For security nerds](#for-security-nerds)
-        - [Docker images are signed and published to Docker Hub's Notary server](#docker-images-are-signed-and-published-to-docker-hubs-notary-server)
-        - [Docker images are labeled with Git and GPG metadata](#docker-images-are-labeled-with-git-and-gpg-metadata)
-    - [Notes](#notes)
-    - [Help wanted!](#help-wanted)
+  - [Intro](#intro)
+  - [Auto-configure roles and policies](#auto-configure-roles-and-policies)
+  - [Auto-configure dynamic database credentials](#auto-configure-dynamic-database-credentials)
+  - [Configuration](#configuration)
+    - [Operator command-line flags](#operator-command-line-flags)
+    - [Operator permissions](#operator-permissions)
+  - [Vault agent sidecar auto-inject mutating webhook](#vault-agent-sidecar-auto-inject-mutating-webhook)
+  - [Monitoring](#monitoring)
+  - [For security nerds](#for-security-nerds)
+    - [Docker images are signed and published to Docker Hub's Notary server](#docker-images-are-signed-and-published-to-docker-hubs-notary-server)
+    - [Docker images are labeled with Git and GPG metadata](#docker-images-are-labeled-with-git-and-gpg-metadata)
+  - [Multi-architecture images](#multi-architecture-images)
+  - [Notes](#notes)
+  - [Help wanted!](#help-wanted)
 
 <!-- /TOC -->
 
@@ -72,7 +73,9 @@ The [`vault-agent-auto-inject-webhook`](https://github.com/patoarvizu/vault-agen
 
 ## Monitoring
 
-If your Kubernetes cluster is running the Prometheus [operator](https://github.com/coreos/prometheus-operator), this operator will automatically create an additional `Service` called `vault-dynamic-configuration-operator-metrics` and a corresponding `ServiceMonitor` of the same name. This monitor will scrape the operator for metrics on two different ports. Port 8383 will post general metrics about the running process, while port 8686 will post metrics about the custom resources managed by the operator. More information can be found on the Operator SDK [website](https://sdk.operatorframework.io/docs/golang/monitoring/prometheus/).
+~If your Kubernetes cluster is running the Prometheus [operator](https://github.com/coreos/prometheus-operator), this operator will automatically create an additional `Service` called `vault-dynamic-configuration-operator-metrics` and a corresponding `ServiceMonitor` of the same name. This monitor will scrape the operator for metrics on two different ports. Port 8383 will post general metrics about the running process, while port 8686 will post metrics about the custom resources managed by the operator. More information can be found on the Operator SDK [website](https://sdk.operatorframework.io/docs/golang/monitoring/prometheus/).~
+
+Up until version `v0.4.1`, this operator was using a version of the operator-sdk that supported automatic creation a `Service` and `ServiceMonitor` objects to scrape Prometheus metrics, but that functionality has been removed. If you're running the Prometheus operator in your cluster and you want to scrape metrics for this operator, you're going to have to explicitly create them yourself, querying the `/metrics` endpoint on port `:8080`.
 
 ## For security nerds
 
@@ -101,6 +104,16 @@ Here's the list of included Docker labels:
 - `GIT_COMMIT`
 - `GIT_TAG`
 - `SIGNATURE_KEY`
+
+## Multi-architecture images
+
+Manifests published with the semver tag (e.g. `patoarvizu/vault-dynamic-configuration-operator:v0.5.0`), as well as `latest` are multi-architecture manifest lists. In addition to those, there are architecture-specific tags that correspond to an image manifest directly, tagged with the corresponding architecture as a suffix, e.g. `v0.5.0-amd64`. Both types (image manifests or manifest lists) are signed with Notary as described above.
+
+Here's the list of architectures the images are being built for, and their corresponding suffixes for images:
+
+- `linux/amd64`, `-amd64`
+- `linux/arm64`, `-arm64`
+- `linux/arm/v7`, `-arm7`
 
 ## Notes
 
