@@ -13,4 +13,6 @@ defaultConfiguration:
   dbUserCreationStatement: "CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT ALL ON *.* TO '{{name}}'@'%';"
   dbDefaultTTL: 1h
   dbMaxTTL: 24h
+prometheusMonitoring:
+  enable: true
 resources:

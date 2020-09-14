@@ -1,0 +1,35 @@
+{{- if .Values.prometheusMonitoring.enable }}
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-dynamic-configuration-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: vault-dynamic-configuration-operator
+spec:
+  type: ClusterIP
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: http-metrics
+    name: http-metrics
+  selector:
+    app: vault-dynamic-configuration-operator
+
+---
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vault-dynamic-configuration-operator
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpoints:
+  - path: /metrics
+    port: http-metrics
+  selector:
+    matchLabels:
+      app: vault-dynamic-configuration-operator
+
+{{ end }}
