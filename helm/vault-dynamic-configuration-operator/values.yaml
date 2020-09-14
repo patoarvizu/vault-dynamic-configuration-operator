@@ -5,3 +5,12 @@ imagePullPolicy: IfNotPresent
 serviceAccount:
   name: vault-dynamic-configuration-operator
 watchNamespace: ""
+defaultConfiguration:
+  policyTemplate: |
+    path "secret/{{ .Name }}" {
+      capabilities = ["read"]
+    }
+  dbUserCreationStatement: "CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT ALL ON *.* TO '{{name}}'@'%';"
+  dbDefaultTTL: 1h
+  dbMaxTTL: 24h
+resources:
