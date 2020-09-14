@@ -55,6 +55,13 @@ jobs:
         command: |
           wget -q -O - https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG=v${K3D_VERSION} bash
     - run:
+        name: Install Helm
+        command: |
+          wget https://get.helm.sh/helm-v3.3.1-linux-amd64.tar.gz
+          tar -zxvf helm-v3.3.1-linux-amd64.tar.gz
+          chmod +x linux-amd64/helm
+          sudo mv linux-amd64/helm /usr/local/bin/
+    - run:
         name: Run all tests
         command: |
           export KUBECONFIG=~/.k3d/k3s-default-config
@@ -64,10 +71,10 @@ jobs:
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-operator.yaml
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-cluster-kubernetes-and-db.yaml
           kubectl apply -f test/manifests/namespaces/test.yaml
-          make deploy
+          helm install vault-dynamic-configuration-operator helm/vault-dynamic-configuration-operator/ -n vault
           sleep 60
           go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Single namespace"
-          kubectl -n vault patch deployment controller-manager --type='json' -p='[{"op":"add", "path":"/spec/template/spec/containers/0/args/-", "value":"--bound-roles-to-all-namespaces"}]'
+          helm upgrade vault-dynamic-configuration-operator helm/vault-dynamic-configuration-operator/ -n vault --set boundRolesToAllNamespaces=true
           go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="All namespaces"
     - save_cache:
         key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}

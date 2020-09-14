@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-dynamic-configuration
+  namespace: vault
+data:
+  policy-template: |
+    path "secret/{{ "{{" }} .Name {{ "}}" }}" {
+      capabilities = ["read"]
+    }
+  db-user-creation-statement: "CREATE USER '{{ "{{" }}name{{ "}}" }}'@'%' IDENTIFIED BY '{{ "{{" }}password{{ "}}" }}'; GRANT ALL ON *.* TO '{{ "{{" }}name{{ "}}" }}'@'%';"
+  db-default-ttl: 1h
+  db-max-ttl: 24h

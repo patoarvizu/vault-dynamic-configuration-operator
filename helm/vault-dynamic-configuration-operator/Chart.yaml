@@ -1,0 +1,4 @@
+apiVersion: v1
+description: Vault dynamic configuration operator
+name: vault-dynamic-configuration-operator
+version: 0.0.0

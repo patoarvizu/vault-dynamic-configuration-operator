@@ -1,0 +1,7 @@
+annotationPrefix: vault.patoarvizu.dev
+boundRolesToAllNamespaces: false
+imageVersion: latest
+imagePullPolicy: IfNotPresent
+serviceAccount:
+  name: vault-dynamic-configuration-operator
+watchNamespace: ""
