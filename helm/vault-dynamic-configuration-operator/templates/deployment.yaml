@@ -31,9 +31,3 @@ spec:
         env:
         - name: WATCH_NAMESPACE
           value: {{ .Values.watchNamespace }}
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: OPERATOR_NAME
-          value: vault-dynamic-configuration-operator
