@@ -1,0 +1,31 @@
+# annotationPrefix -- The value to be set on the `--annotation-prefix` flag.
+annotationPrefix: vault.patoarvizu.dev
+# boundRolesToAllNamespaces -- If set to `true` the `--bound-roles-to-all-namespaces` flag will be set.
+boundRolesToAllNamespaces: false
+# imageVersion -- The image version used for the operator.
+imageVersion: latest
+# imagePullPolicy -- The imagePullPolicy to be used on the operator.
+imagePullPolicy: IfNotPresent
+serviceAccount:
+  # serviceAccount.name -- The name of the `ServiceAccount` to be created.
+  name: vault-dynamic-configuration-operator
+# watchNamespace -- The value to be set on the `WATCH_NAMESPACE` environment variable.
+watchNamespace: ""
+# defaultConfiguration -- The values to be used for the default `vault-dynamic-configuration` `ConfigMap`.
+defaultConfiguration:
+  # defaultConfiguration.policyTemplate -- Corresponds to the `policy-template` field of the default `ConfigMap`.
+  policyTemplate: |
+    path "secret/{{ .Name }}" {
+      capabilities = ["read"]
+    }
+  # defaultConfiguration.dbUserCreationStatement  -- Corresponds to the `db-user-creation-statement` field of the default `ConfigMap`.
+  dbUserCreationStatement: "CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT ALL ON *.* TO '{{name}}'@'%';"
+  # defaultConfiguration.dbDefaultTTL  -- Corresponds to the `db-default-ttl` field of the default `ConfigMap`.
+  dbDefaultTTL: 1h
+  # defaultConfiguration.dbMaxTTL  -- Corresponds to the `db-max-ttl` field of the default `ConfigMap`.
+  dbMaxTTL: 24h
+prometheusMonitoring:
+  # prometheusMonitoring.enable -- Create the `Service` and `ServiceMonitor` objects to enable Prometheus monitoring on the operator.
+  enable: true
+# resources -- (object) The resources requests/limits to be set on the deployment pod spec template.
+resources:

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-dynamic-configuration
+  namespace: {{ .Release.Namespace }}
+data:
+  policy-template: {{"|"}}{{ .Values.defaultConfiguration.policyTemplate | nindent 4 }}
+  db-user-creation-statement: {{ .Values.defaultConfiguration.dbUserCreationStatement }}
+  db-default-ttl: {{ .Values.defaultConfiguration.dbDefaultTTL }}
+  db-max-ttl: {{ .Values.defaultConfiguration.dbMaxTTL }}
