@@ -74,7 +74,7 @@ jobs:
           helm install vault-dynamic-configuration-operator helm/vault-dynamic-configuration-operator/ -n vault
           sleep 60
           go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Single namespace"
-          helm upgrade vault-dynamic-configuration-operator helm/vault-dynamic-configuration-operator/ -n vault --set boundRolesToAllNamespaces=true
+          helm upgrade vault-dynamic-configuration-operator helm/vault-dynamic-configuration-operator/ -n vault --set flags.boundRolesToAllNamespaces=true
           go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="All namespaces"
     - save_cache:
         key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}

@@ -21,8 +21,12 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        - --annotation-prefix={{ .Values.annotationPrefix }}
-        {{- if .Values.boundRolesToAllNamespaces }}
+        - --annotation-prefix={{ .Values.flags.annotationPrefix }}
+        - --target-vault-name={{ .Values.flags.targetVaultName }}
+        - --auto-configure-annotation={{ .Values.flags.autoConfigureAnnotation }}
+        - --auto-configuredb-creds-annotation={{ .Values.flags.autoConfigureDBCredsAnnotation }}
+        - --token-ttl={{ .Values.flags.tokenTTL }}
+        {{- if .Values.flags.boundRolesToAllNamespaces }}
         - --bound-roles-to-all-namespaces
         {{- end }}
         image: patoarvizu/vault-dynamic-configuration-operator:{{ .Values.imageVersion }}
