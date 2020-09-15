@@ -1,7 +1,16 @@
-# annotationPrefix -- The value to be set on the `--annotation-prefix` flag.
-annotationPrefix: vault.patoarvizu.dev
-# boundRolesToAllNamespaces -- If set to `true` the `--bound-roles-to-all-namespaces` flag will be set.
-boundRolesToAllNamespaces: false
+flags:
+  # flags.annotationPrefix -- The value to be set on the `--annotation-prefix` flag.
+  annotationPrefix: vault.patoarvizu.dev
+  # flags.boundRolesToAllNamespaces -- If set to `true` the `--bound-roles-to-all-namespaces` flag will be set.
+  boundRolesToAllNamespaces: false
+  # flags.targetVaultName -- The value to be set on the `--target-vault-name` flag.
+  targetVaultName: vault
+  # flags.autoConfigureAnnotations -- The value to be set on the `--auto-configure-annotation` flag.
+  autoConfigureAnnotation: auto-configure
+  # flags.dynamicDBCredentialsAnnotation -- The value to be set on the `--dynamic-db-credentials-annotation` flag.
+  dynamicDBCredentialsAnnotation: db-dynamic-creds
+  # flags.tokenTTL -- The value to be set on the `--token-ttl` flag.
+  tokenTTL: 5m
 # imageVersion -- The image version used for the operator.
 imageVersion: latest
 # imagePullPolicy -- The imagePullPolicy to be used on the operator.

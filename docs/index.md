@@ -8,10 +8,14 @@ Vault dynamic configuration operator
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| annotationPrefix | string | `"vault.patoarvizu.dev"` | The value to be set on the `--annotation-prefix` flag. |
-| boundRolesToAllNamespaces | bool | `false` | If set to `true` the `--bound-roles-to-all-namespaces` flag will be set. |
 | defaultConfiguration | object | `{"dbDefaultTTL":"1h","dbMaxTTL":"24h","dbUserCreationStatement":"CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT ALL ON *.* TO '{{name}}'@'%';","policyTemplate":"path \"secret/{{ .Name }}\" {\n  capabilities = [\"read\"]\n}\n"}` | The values to be used for the default `vault-dynamic-configuration` `ConfigMap`. |
 | defaultConfiguration.policyTemplate | string | `"path \"secret/{{ .Name }}\" {\n  capabilities = [\"read\"]\n}\n"` | Corresponds to the `policy-template` field of the default `ConfigMap`. |
+| flags.annotationPrefix | string | `"vault.patoarvizu.dev"` | The value to be set on the `--annotation-prefix` flag. |
+| flags.autoConfigureAnnotation | string | `"auto-configure"` |  |
+| flags.boundRolesToAllNamespaces | bool | `false` | If set to `true` the `--bound-roles-to-all-namespaces` flag will be set. |
+| flags.dynamicDBCredentialsAnnotation | string | `"db-dynamic-creds"` | The value to be set on the `--dynamic-db-credentials-annotation` flag. |
+| flags.targetVaultName | string | `"vault"` | The value to be set on the `--target-vault-name` flag. |
+| flags.tokenTTL | string | `"5m"` | The value to be set on the `--token-ttl` flag. |
 | imagePullPolicy | string | `"IfNotPresent"` | The imagePullPolicy to be used on the operator. |
 | imageVersion | string | `"latest"` | The image version used for the operator. |
 | prometheusMonitoring.enable | bool | `true` | Create the `Service` and `ServiceMonitor` objects to enable Prometheus monitoring on the operator. |
