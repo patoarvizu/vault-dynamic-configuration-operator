@@ -23,8 +23,8 @@ spec:
         - --enable-leader-election
         - --annotation-prefix={{ .Values.flags.annotationPrefix }}
         - --target-vault-name={{ .Values.flags.targetVaultName }}
-        - --auto-configure-annotation{{ .Values.flags.autoConfigureAnnotation }}
-        - --dynamic-db-credentials-annotation={{ .Values.flags.dynamicDBCredentialsAnnotation }}
+        - --auto-configure-annotation={{ .Values.flags.autoConfigureAnnotation }}
+        - --auto-configuredb-creds-annotation={{ .Values.flags.autoConfigureDBCredsAnnotation }}
         - --token-ttl={{ .Values.flags.tokenTTL }}
         {{- if .Values.flags.boundRolesToAllNamespaces }}
         - --bound-roles-to-all-namespaces

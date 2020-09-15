@@ -12,8 +12,8 @@ Vault dynamic configuration operator
 | defaultConfiguration.policyTemplate | string | `"path \"secret/{{ .Name }}\" {\n  capabilities = [\"read\"]\n}\n"` | Corresponds to the `policy-template` field of the default `ConfigMap`. |
 | flags.annotationPrefix | string | `"vault.patoarvizu.dev"` | The value to be set on the `--annotation-prefix` flag. |
 | flags.autoConfigureAnnotation | string | `"auto-configure"` |  |
+| flags.autoConfigureDBCredsAnnotation | string | `"db-dynamic-creds"` | The value to be set on the `--auto-configuredb-creds-annotation` flag. |
 | flags.boundRolesToAllNamespaces | bool | `false` | If set to `true` the `--bound-roles-to-all-namespaces` flag will be set. |
-| flags.dynamicDBCredentialsAnnotation | string | `"db-dynamic-creds"` | The value to be set on the `--dynamic-db-credentials-annotation` flag. |
 | flags.targetVaultName | string | `"vault"` | The value to be set on the `--target-vault-name` flag. |
 | flags.tokenTTL | string | `"5m"` | The value to be set on the `--token-ttl` flag. |
 | imagePullPolicy | string | `"IfNotPresent"` | The imagePullPolicy to be used on the operator. |

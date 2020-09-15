@@ -7,8 +7,8 @@ flags:
   targetVaultName: vault
   # flags.autoConfigureAnnotations -- The value to be set on the `--auto-configure-annotation` flag.
   autoConfigureAnnotation: auto-configure
-  # flags.dynamicDBCredentialsAnnotation -- The value to be set on the `--dynamic-db-credentials-annotation` flag.
-  dynamicDBCredentialsAnnotation: db-dynamic-creds
+  # flags.autoConfigureDBCredsAnnotation -- The value to be set on the `--auto-configuredb-creds-annotation` flag.
+  autoConfigureDBCredsAnnotation: db-dynamic-creds
   # flags.tokenTTL -- The value to be set on the `--token-ttl` flag.
   tokenTTL: 5m
 # imageVersion -- The image version used for the operator.
