@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vault-dynamic-configuration-operator
-  namespace: {{ .Release.Namespace }}
   labels:
     app: vault-dynamic-configuration-operator
 spec:
@@ -36,5 +35,5 @@ spec:
         - name: WATCH_NAMESPACE
           value: {{ .Values.watchNamespace }}
         {{- if .Values.resources }}
-        resources: {{ toYaml .Values.resources | nindent 8 }}
+        resources: {{ toYaml .Values.resources | nindent 10 }}
         {{- end }}
