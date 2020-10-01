@@ -39,7 +39,7 @@ Note that this operator doesn't enforce that the annotated `ServiceAccount` is a
 
 Additionally, if the service account is annotated with `vault.patoarvizu.dev/db-dynamic-creds` (or the custom values, if overwritten on the command line), the operator will add a [role](https://www.vaultproject.io/api/secret/databases/index.html#create-role) for dynamic database credentials. One or more database [connections](https://www.vaultproject.io/api/secret/databases/index.html#configure-connection) should be previously configured with the appropriate credentials.
 
-The operator will take the value of the annotation and create a new role for the database connection with that name, and add the service name as an [allowed role](https://www.vaultproject.io/api/secret/databases/index.html#allowed_roles). All new roles will be created using the values of `db-user-creation-statement`, `db-default-ttl`, and `db-max-ttl` from the `vault-dynamic-configuration` `ConfigMap`.
+The operator will take the value of the annotation and create a new role for the database connection with that name, and add the service name as an [allowed role](https://www.vaultproject.io/api/secret/databases/index.html#allowed_roles) (e.g. `vault.patoarvizu.dev/db-dynamic-creds: mysql` will create a new role and allow it to get credentials for the connection named `mysql`). All new roles will be created using the values of `db-user-creation-statement`, `db-default-ttl`, and `db-max-ttl` from the `vault-dynamic-configuration` `ConfigMap`.
 
 As of this version, only [MySQL/MariaDB](https://www.vaultproject.io/api/secret/databases/mysql-maria.html) dynamic credentials are supported.
 
@@ -52,7 +52,7 @@ Flag | Description | Default
  `--target-vault-name` | Name of the Bank-Vaults CRD to target for modifications. The CRD must be deployed in the same namespace as the operator. | `vault`
  `--annotation-prefix` | The prefix to all annotations used and discovered by the controller. | `vault.patoarvizu.dev`
  `--auto-configure-annotation` | The annotation that must be appended to the `--annotation-prefix` value (with a `/` as a separator between the two) and added to `ServiceAccount` objects to automatically configure it for Vault access. The value of the annotation must be the name of the target database connection in the Vault configuration. | `auto-configure`
- `--auto-configuredb-creds-annotation` | The annotation that must be appended to the `--annotation-prefix` value (with a `/` as a separator between the two) and added to `ServiceAccount` objects to automatically configure it for having access to generate dynamic database credentials. The value of the annotation must be `"true"`, any other value will be ignored. | `db-dynamic-creds`
+ `--auto-configuredb-creds-annotation` | The annotation that must be appended to the `--annotation-prefix` value (with a `/` as a separator between the two) and added to `ServiceAccount` objects to automatically configure it for having access to generate dynamic database credentials. | `db-dynamic-creds`
  `--bound-roles-to-all-namespaces` | Set `bound_service_account_namespaces` to `'*'` instead of the service account's namespace. | `false`
  `--token-ttl` | Value to set roles' `token_ttl` to | `5m`
 
