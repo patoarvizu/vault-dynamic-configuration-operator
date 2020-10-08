@@ -1,4 +1,4 @@
 apiVersion: v2
 description: Vault dynamic configuration operator
 name: vault-dynamic-configuration-operator
-version: 0.1.0
+version: 0.1.1
