@@ -28,6 +28,9 @@ spec:
         {{- if .Values.flags.boundRolesToAllNamespaces }}
         - --bound-roles-to-all-namespaces
         {{- end }}
+        ports:
+        - name: http-metrics
+          containerPort: 8080
         image: patoarvizu/vault-dynamic-configuration-operator:{{ .Values.imageVersion }}
         imagePullPolicy: {{ .Values.imagePullPolicy }}
         name: manager
