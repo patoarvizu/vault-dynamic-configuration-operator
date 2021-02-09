@@ -153,6 +153,11 @@ func (r *ServiceAccountReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return reconcile.Result{}, nil
 	}
 
+	if instance.ObjectMeta.Name == "default" {
+		reqLogger.V(1).Info(fmt.Sprintf("Explicitly ignoring 'default' ServiceAccount in namespace %s, to avoid overwriting Vaults 'default' policy", &instance.ObjectMeta.Namespace))
+		return reconcile.Result{}, nil
+	}
+
 	vaultConfig := &bankvaultsv1alpha1.Vault{}
 	ns, _ := getOperatorNamespace()
 	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: TargetVaultName, Namespace: ns}, vaultConfig)

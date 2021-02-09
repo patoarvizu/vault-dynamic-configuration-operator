@@ -122,6 +122,19 @@ var _ = Describe("All namespaces", func() {
 	})
 })
 
+var _ = Describe("Any namespace", func() {
+	Context("When annotating a service account called 'default'", func() {
+		It("Should NOT create a Vault role or policy wit that name", func() {
+			serviceAccount, err := createServiceAccount("default", "default", map[string]string{})
+			Expect(err).ToNot(HaveOccurred())
+			err = testVaultRole("default", []string{"*"})
+			Expect(err).To(HaveOccurred())
+			err = k8sClient.Delete(context.TODO(), serviceAccount)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+})
+
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
