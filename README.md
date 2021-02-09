@@ -120,6 +120,7 @@ Here's the list of architectures the images are being built for, and their corre
 
 * If the annotation is added to a service account that matches a role/policy that already exists in the Vault CRD will be modified, but all other role/policies will be kept as they are defined.
 * Currently, the Operator will add the appropriate configuration, but won't remove it if the annotation is removed (or set to a non-`true` value), or if the service account itself is removed.
+* The controller will explicitly ignore any service accounts named `default`, to avoid accidentally overwriting Vault's built-in [`default` policy](https://www.vaultproject.io/docs/concepts/policies#default-policy).
 
 ## Help wanted!
 
