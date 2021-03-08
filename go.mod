@@ -14,10 +14,9 @@ require (
 )
 
 replace (
-	github.com/go-logr/logr => github.com/go-logr/logr v0.1.0
-	github.com/onsi/ginkgo => github.com/onsi/ginkgo v1.12.1
 	google.golang.org/grpc => google.golang.org/grpc v1.29.1
-	k8s.io/api => k8s.io/api v0.18.6
-	k8s.io/apimachinery => k8s.io/apimachinery v0.18.6
-	k8s.io/client-go => k8s.io/client-go v0.18.6
+	k8s.io/api => k8s.io/api v0.19.3
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.19.3
+	k8s.io/apimachinery => k8s.io/apimachinery v0.19.3
+	k8s.io/client-go => k8s.io/client-go v0.19.3
 )

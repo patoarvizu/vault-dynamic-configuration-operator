@@ -154,7 +154,7 @@ func (r *ServiceAccountReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 
 	if instance.ObjectMeta.Name == "default" {
-		reqLogger.V(1).Info(fmt.Sprintf("Explicitly ignoring 'default' ServiceAccount in namespace %s, to avoid overwriting Vaults 'default' policy", &instance.ObjectMeta.Namespace))
+		reqLogger.V(1).Info(fmt.Sprintf("Explicitly ignoring 'default' ServiceAccount in namespace %s, to avoid overwriting Vaults 'default' policy", instance.ObjectMeta.Namespace))
 		return reconcile.Result{}, nil
 	}
 
