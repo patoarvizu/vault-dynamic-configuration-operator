@@ -391,6 +391,11 @@ func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta)
 }
 
 func updateDBSecretConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
+	jsonMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(vaultConfig.Spec.ExternalConfigJSON()), &jsonMap)
+	if err != nil {
+		return err
+	}
 	dbSecret, err := bvConfig.GetDBSecret()
 	if err != nil {
 		return err
@@ -400,12 +405,17 @@ func updateDBSecretConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvau
 		if s.Type != "database" {
 			continue
 		}
-		return json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["secrets"].([]interface{})[i])
+		return json.Unmarshal(configJsonData, &jsonMap["secrets"].([]interface{})[i])
 	}
 	return nil
 }
 
 func updateKubernetesConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
+	jsonMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(vaultConfig.Spec.ExternalConfigJSON()), &jsonMap)
+	if err != nil {
+		return err
+	}
 	kubernetesAuth, err := bvConfig.getKubernetesAuth()
 	if err != nil {
 		return err
@@ -418,11 +428,11 @@ func updateKubernetesConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankv
 		if a.Type != "kubernetes" {
 			continue
 		}
-		err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["auth"].([]interface{})[i])
+		err = json.Unmarshal(configJsonData, &jsonMap["auth"].([]interface{})[i])
 		if err != nil {
 			return err
 		}
-		vaultConfig.Spec.ExternalConfig["policies"] = bvConfig.Policies
+		jsonMap["policies"] = bvConfig.Policies
 		return nil
 	}
 	return nil
