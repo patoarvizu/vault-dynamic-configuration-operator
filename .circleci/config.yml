@@ -76,6 +76,7 @@ jobs:
           go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Single namespace"
           helm upgrade vault-dynamic-configuration-operator helm/vault-dynamic-configuration-operator/ -n vault --set flags.boundRolesToAllNamespaces=true
           go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="All namespaces"
+          go test github.com/patoarvizu/vault-dynamic-configuration-operator/test/e2e -v -ginkgo.focus="Any namespace"
     - save_cache:
         key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
         paths:

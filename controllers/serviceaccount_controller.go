@@ -154,7 +154,7 @@ func (r *ServiceAccountReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 
 	if instance.ObjectMeta.Name == "default" {
-		reqLogger.V(1).Info(fmt.Sprintf("Explicitly ignoring 'default' ServiceAccount in namespace %s, to avoid overwriting Vaults 'default' policy", &instance.ObjectMeta.Namespace))
+		reqLogger.V(1).Info(fmt.Sprintf("Explicitly ignoring 'default' ServiceAccount in namespace %s, to avoid overwriting Vaults 'default' policy", instance.ObjectMeta.Namespace))
 		return reconcile.Result{}, nil
 	}
 
@@ -391,6 +391,11 @@ func addOrUpdateKubernetesRole(kubernetesAuth *Auth, metadata metav1.ObjectMeta)
 }
 
 func updateDBSecretConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
+	jsonMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(vaultConfig.Spec.ExternalConfigJSON()), &jsonMap)
+	if err != nil {
+		return err
+	}
 	dbSecret, err := bvConfig.GetDBSecret()
 	if err != nil {
 		return err
@@ -400,12 +405,26 @@ func updateDBSecretConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvau
 		if s.Type != "database" {
 			continue
 		}
-		return json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["secrets"].([]interface{})[i])
+		err = json.Unmarshal(configJsonData, &jsonMap["secrets"].([]interface{})[i])
+		if err != nil {
+			return err
+		}
+		unmarshaledJsonMap, err := json.Marshal(jsonMap)
+		if err != nil {
+			return err
+		}
+		vaultConfig.Spec.ExternalConfig.Raw = unmarshaledJsonMap
+		return nil
 	}
 	return nil
 }
 
 func updateKubernetesConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvaultsv1alpha1.Vault) error {
+	jsonMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(vaultConfig.Spec.ExternalConfigJSON()), &jsonMap)
+	if err != nil {
+		return err
+	}
 	kubernetesAuth, err := bvConfig.getKubernetesAuth()
 	if err != nil {
 		return err
@@ -418,11 +437,16 @@ func updateKubernetesConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankv
 		if a.Type != "kubernetes" {
 			continue
 		}
-		err = json.Unmarshal(configJsonData, &vaultConfig.Spec.ExternalConfig["auth"].([]interface{})[i])
+		err = json.Unmarshal(configJsonData, &jsonMap["auth"].([]interface{})[i])
 		if err != nil {
 			return err
 		}
-		vaultConfig.Spec.ExternalConfig["policies"] = bvConfig.Policies
+		jsonMap["policies"] = bvConfig.Policies
+		unmarshaledJsonMap, err := json.Marshal(jsonMap)
+		if err != nil {
+			return err
+		}
+		vaultConfig.Spec.ExternalConfig.Raw = unmarshaledJsonMap
 		return nil
 	}
 	return nil
