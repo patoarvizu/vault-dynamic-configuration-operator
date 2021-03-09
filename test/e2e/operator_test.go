@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/patoarvizu/vault-dynamic-configuration-operator/controllers"
 	apiv1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -125,12 +126,10 @@ var _ = Describe("All namespaces", func() {
 var _ = Describe("Any namespace", func() {
 	Context("When annotating a service account called 'default'", func() {
 		It("Should NOT create a Vault role or policy wit that name", func() {
-			serviceAccount, err := createServiceAccount("default", "default", map[string]string{})
+			err := updateDefaultServiceAccount()
 			Expect(err).ToNot(HaveOccurred())
 			err = testVaultRole("default", []string{"*"})
 			Expect(err).To(HaveOccurred())
-			err = k8sClient.Delete(context.TODO(), serviceAccount)
-			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 })
@@ -160,6 +159,16 @@ func createServiceAccount(name string, namespace string, extraAnnotations map[st
 	}
 	e := k8sClient.Create(context.TODO(), operatorTestServiceAccount)
 	return operatorTestServiceAccount, e
+}
+
+func updateDefaultServiceAccount() error {
+	instance := &corev1.ServiceAccount{}
+	err := k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: "default", Name: "default"}, instance)
+	if err != nil {
+		return err
+	}
+	instance.Annotations = map[string]string{"vault.patoarvizu.dev/auto-configure": "true"}
+	return k8sClient.Update(context.TODO(), instance)
 }
 
 func namespaceIsInAllowedList(namespace string, allowedNamespaces interface{}) bool {
