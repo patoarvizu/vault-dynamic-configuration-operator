@@ -405,7 +405,16 @@ func updateDBSecretConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankvau
 		if s.Type != "database" {
 			continue
 		}
-		return json.Unmarshal(configJsonData, &jsonMap["secrets"].([]interface{})[i])
+		err = json.Unmarshal(configJsonData, &jsonMap["secrets"].([]interface{})[i])
+		if err != nil {
+			return err
+		}
+		unmarshaledJsonMap, err := json.Marshal(jsonMap)
+		if err != nil {
+			return err
+		}
+		vaultConfig.Spec.ExternalConfig.Raw = unmarshaledJsonMap
+		return nil
 	}
 	return nil
 }
@@ -433,6 +442,11 @@ func updateKubernetesConfiguration(bvConfig BankVaultsConfig, vaultConfig *bankv
 			return err
 		}
 		jsonMap["policies"] = bvConfig.Policies
+		unmarshaledJsonMap, err := json.Marshal(jsonMap)
+		if err != nil {
+			return err
+		}
+		vaultConfig.Spec.ExternalConfig.Raw = unmarshaledJsonMap
 		return nil
 	}
 	return nil
