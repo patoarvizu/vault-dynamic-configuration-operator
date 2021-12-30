@@ -17,6 +17,19 @@ executors:
       GO111MODULE: "on"
       DOCKER_CLI_EXPERIMENTAL: enabled
     working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
+  vm-arm:
+    machine:
+      image: ubuntu-2004:202111-02
+    resource_class: arm.medium
+    environment:
+      GOLANG_VERSION: 1.16.12
+      NOTARY_VERSION: 0.6.1
+      KUBECTL_VERSION: 1.21.5
+      K3D_VERSION: 4.4.8
+      GOPATH: /home/circleci/go
+      GO111MODULE: "on"
+      DOCKER_CLI_EXPERIMENTAL: enabled
+    working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
 
 jobs:
   build:
