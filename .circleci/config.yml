@@ -8,10 +8,10 @@ executors:
     machine:
       image: ubuntu-1604:202007-01
     environment:
-      GOLANG_VERSION: 1.13.8
+      GOLANG_VERSION: 1.16.12
       NOTARY_VERSION: 0.6.1
-      KUBECTL_VERSION: 1.12.0
-      K3D_VERSION: 3.0.0
+      KUBECTL_VERSION: 1.21.5
+      K3D_VERSION: 5.0.1
       GOPATH: /home/circleci/go
       GO111MODULE: "on"
       DOCKER_CLI_EXPERIMENTAL: enabled
@@ -65,7 +65,7 @@ jobs:
         name: Run all tests
         command: |
           export KUBECONFIG=~/.k3d/k3s-default-config
-          k3d cluster create --image rancher/k3s:v1.0.0 --wait
+          k3d cluster create --wait
           k3d image import patoarvizu/vault-dynamic-configuration-operator:latest
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/prometheus-operator/crds.yaml
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-operator.yaml
