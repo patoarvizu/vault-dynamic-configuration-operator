@@ -160,8 +160,8 @@ workflows:
         - build
         context: authentication-tokens
         filters:
-          branches:
-            ignore: /^.*$/
-            only: /^master$/
+          # branches:
+          #   ignore: /^.*$/
+          #   only: /^master$/
           tags:
             only: /^v\d+\.\d+.\d+$/
