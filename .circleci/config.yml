@@ -7,6 +7,7 @@ executors:
   vm:
     machine:
       image: ubuntu-2004:202111-02
+    resource_class: large
     environment:
       GOLANG_VERSION: 1.16.12
       NOTARY_VERSION: 0.6.1
