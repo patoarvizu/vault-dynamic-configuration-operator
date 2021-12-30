@@ -157,7 +157,7 @@ jobs:
           docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
           docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
           docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
-        no_output_timeout: 30m
+        no_output_timeout: 60m
     - run:
         name: Build and push arm7 image
         command: |
@@ -173,7 +173,7 @@ jobs:
           docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm7
           docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
           docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
-        no_output_timeout: 30m
+        no_output_timeout: 60m
     - run:
         name: Push multi-arch images
         command: |
@@ -191,7 +191,7 @@ jobs:
           notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator latest $LENGTH --sha256 $DIGEST -r targets/releases
           notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator $CIRCLE_SHA1 $LENGTH --sha256 $DIGEST -r targets/releases
           notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator $VERSION $LENGTH --sha256 $DIGEST -r targets/releases
-        no_output_timeout: 30m
+        no_output_timeout: 60m
 
 workflows:
   version: 2
