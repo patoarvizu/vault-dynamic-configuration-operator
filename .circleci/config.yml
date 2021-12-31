@@ -315,6 +315,10 @@ workflows:
     - build-arm7-image:
         requires:
         - build
+    - push-arm7-image:
+        requires:
+        - build-arm7-image
+        context: authentication-tokens
     # - push-multi-arch:
     #     requires:
     #     - build
