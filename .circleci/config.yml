@@ -182,6 +182,7 @@ jobs:
           docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
           docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
           docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+        no_output_timeout: 60m
 
   build-arm7-image:
     executor: vm-arm
