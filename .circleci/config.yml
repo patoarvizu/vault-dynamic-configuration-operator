@@ -341,13 +341,13 @@ workflows:
         filters:
           tags:
             only: /^v\d+\.\d+.\d+$/
-    - build-arm64-image:
+    - build-arm64-image
     - push-arm64-image:
         requires:
         - build
         - build-arm64-image
         context: authentication-tokens
-    - build-arm7-image:
+    - build-arm7-image
     - push-arm7-image:
         requires:
         - build
