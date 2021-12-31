@@ -164,7 +164,7 @@ jobs:
         name: Sign and push arm64 image
         command: |
           docker buildx create --name cci-builder --use
-          docker import /tmp/latest-arm64.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+          docker import --platform=linux/arm64 /tmp/latest-arm64.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm64
           echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
           export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
           notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
@@ -212,7 +212,7 @@ jobs:
         name: Sign and push arm7 image
         command: |
           docker buildx create --name cci-builder --use
-          docker import /tmp/latest-arm7.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm7
+          docker import --platform=linux/arm/v7 /tmp/latest-arm7.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm7
           echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
           export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
           notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
