@@ -280,13 +280,13 @@ workflows:
     - build-arm7-image:
         requires:
         - build
-    - push-multi-arch:
-        requires:
-        - build
-        context: authentication-tokens
-        filters:
-          # branches:
-          #   ignore: /^.*$/
-          #   only: /^master$/
-          tags:
-            only: /^v\d+\.\d+.\d+$/
+    # - push-multi-arch:
+    #     requires:
+    #     - build
+    #     context: authentication-tokens
+    #     filters:
+    #       # branches:
+    #       #   ignore: /^.*$/
+    #       #   only: /^master$/
+    #       tags:
+    #         only: /^v\d+\.\d+.\d+$/
