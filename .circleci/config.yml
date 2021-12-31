@@ -276,7 +276,8 @@ workflows:
   version: 2
   build-operator:
     jobs:
-    - test
+    - test:
+        context: authentication-tokens
     - build-and-push-amd64-image:
         requires:
         - test
