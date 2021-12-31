@@ -32,7 +32,7 @@ executors:
     working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
 
 jobs:
-  build:
+  test:
     executor: vm
     steps:
     - checkout
@@ -98,16 +98,25 @@ jobs:
         key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
         paths:
           - /home/circleci/go/pkg/mod/cache
+
+  build-and-push-amd64-image:
+    executor: vm
+    steps:
+    - checkout
     - run:
         name: Install notary
         command: |
-          curl -L https://github.com/theupdateframework/notary/releases/download/v${NOTARY_VERSION}/notary-Linux-amd64 -o notary
+          curl -L https://github.com/theupdateframework/notary/releases/download/v0.6.1/notary-Linux-amd64 -o notary
           chmod +x notary
           sudo mv notary /usr/local/bin
     - run:
-        name: Build operator
+        name: Log in to Docker Hub
         command: |
           docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+    - run:
+        name: Build and push amd64 image
+        command: |
+          docker buildx create --name cci-builder --use
           echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
           export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
           notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
@@ -119,7 +128,7 @@ jobs:
           docker push patoarvizu/vault-dynamic-configuration-operator:latest-amd64
           docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64
           docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
-        no_output_timeout: 30m
+        no_output_timeout: 60m
 
   build-arm64-image:
     executor: vm-arm
@@ -336,25 +345,32 @@ workflows:
   version: 2
   build-operator:
     jobs:
-    - build:
+    - test:
         context: authentication-tokens
         filters:
           tags:
             only: /^v\d+\.\d+.\d+$/
-    - build-arm64-image
+    - build-and-push-amd64-image:
+        requires:
+        - test
+        context: authentication-tokens
+    - build-arm64-image:
+        requires:
+        - test
     - push-arm64-image:
         requires:
-        - build
         - build-arm64-image
         context: authentication-tokens
-    - build-arm7-image
+    - build-arm7-image:
+        requires:
+        - test
     - push-arm7-image:
         requires:
-        - build
         - build-arm7-image
         context: authentication-tokens
     - push-combined-image:
         requires:
+        - build-and-push-amd64-image
         - push-arm64-image
         - push-arm7-image
         context: authentication-tokens
