@@ -128,7 +128,6 @@ jobs:
           docker push patoarvizu/vault-dynamic-configuration-operator:latest-amd64
           docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64
           docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
-        no_output_timeout: 60m
 
   build-arm64-image:
     executor: vm-arm
@@ -141,7 +140,6 @@ jobs:
           OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
           docker buildx build --progress=plain --platform=linux/arm64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64
           docker save -o /tmp/latest-arm64.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm64
-        no_output_timeout: 60m
     - persist_to_workspace:
         root: /tmp/
         paths:
@@ -178,7 +176,6 @@ jobs:
           docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
           docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
           docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
-        no_output_timeout: 60m
 
   build-arm7-image:
     executor: vm-arm
@@ -191,7 +188,6 @@ jobs:
           OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
           docker buildx build --progress=plain --platform=linux/arm/v7 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7
           docker save -o /tmp/latest-arm7.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm7
-        no_output_timeout: 60m
     - persist_to_workspace:
         root: /tmp/
         paths:
@@ -228,7 +224,6 @@ jobs:
           docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm7
           docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
           docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
-        no_output_timeout: 60m
 
   push-combined-image:
     executor: vm
