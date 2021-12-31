@@ -6,19 +6,33 @@ orbs:
 executors:
   vm:
     machine:
-      image: ubuntu-1604:202007-01
+      image: ubuntu-2004:202111-02
+    resource_class: large
     environment:
-      GOLANG_VERSION: 1.13.8
+      GOLANG_VERSION: 1.16.12
       NOTARY_VERSION: 0.6.1
-      KUBECTL_VERSION: 1.12.0
-      K3D_VERSION: 3.0.0
+      KUBECTL_VERSION: 1.21.5
+      K3D_VERSION: 4.4.8
+      GOPATH: /home/circleci/go
+      GO111MODULE: "on"
+      DOCKER_CLI_EXPERIMENTAL: enabled
+    working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
+  vm-arm:
+    machine:
+      image: ubuntu-2004:202111-02
+    resource_class: arm.medium
+    environment:
+      GOLANG_VERSION: 1.16.12
+      NOTARY_VERSION: 0.6.1
+      KUBECTL_VERSION: 1.21.5
+      K3D_VERSION: 4.4.8
       GOPATH: /home/circleci/go
       GO111MODULE: "on"
       DOCKER_CLI_EXPERIMENTAL: enabled
     working_directory: /home/circleci/go/src/github.com/patoarvizu/vault-dynamic-configuration-operator
 
 jobs:
-  build:
+  test:
     executor: vm
     steps:
     - checkout
@@ -65,11 +79,14 @@ jobs:
         name: Run all tests
         command: |
           export KUBECONFIG=~/.k3d/k3s-default-config
-          k3d cluster create --image rancher/k3s:v1.0.0 --wait
+          k3d cluster create --wait
           k3d image import patoarvizu/vault-dynamic-configuration-operator:latest
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/prometheus-operator/crds.yaml
+          sleep 10
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-operator.yaml
+          sleep 10
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-cluster-kubernetes-and-db.yaml
+          sleep 10
           kubectl apply -f test/manifests/namespaces/test.yaml
           helm install vault-dynamic-configuration-operator helm/vault-dynamic-configuration-operator/ -n vault
           sleep 60
@@ -81,16 +98,25 @@ jobs:
         key: vault-dynamic-configuration-operator-golang-cache-{{ checksum "go.sum" }}
         paths:
           - /home/circleci/go/pkg/mod/cache
+
+  build-and-push-amd64-image:
+    executor: vm
+    steps:
+    - checkout
     - run:
         name: Install notary
         command: |
-          curl -L https://github.com/theupdateframework/notary/releases/download/v${NOTARY_VERSION}/notary-Linux-amd64 -o notary
+          curl -L https://github.com/theupdateframework/notary/releases/download/v0.6.1/notary-Linux-amd64 -o notary
           chmod +x notary
           sudo mv notary /usr/local/bin
     - run:
-        name: Build operator
+        name: Log in to Docker Hub
         command: |
           docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+    - run:
+        name: Build and push amd64 image
+        command: |
+          docker buildx create --name cci-builder --use
           echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
           export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
           notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
@@ -102,9 +128,114 @@ jobs:
           docker push patoarvizu/vault-dynamic-configuration-operator:latest-amd64
           docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64
           docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64
-        no_output_timeout: 30m
 
-  push-multi-arch:
+  build-arm64-image:
+    executor: vm-arm
+    steps:
+    - checkout
+    - run:
+        name: Build arm64 image
+        command: |
+          docker buildx create --name cci-builder --use
+          OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+          docker buildx build --progress=plain --platform=linux/arm64 --cache-to=type=local,dest=/tmp/latest-arm64-cache,mode=max $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+    - persist_to_workspace:
+        root: /tmp/
+        paths:
+        - latest-arm64-cache
+
+  push-arm64-image:
+    executor: vm
+    steps:
+    - checkout
+    - attach_workspace:
+        at: /tmp/
+    - run:
+        name: Install notary
+        command: |
+          curl -L https://github.com/theupdateframework/notary/releases/download/v0.6.1/notary-Linux-amd64 -o notary
+          chmod +x notary
+          sudo mv notary /usr/local/bin
+    - run:
+        name: Log in to Docker Hub
+        command: |
+          docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+    - run:
+        name: Sign and push arm64 image
+        command: |
+          sudo apt-get update
+          sudo apt-get install qemu-user -y
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+          docker buildx create --name cci-builder --use
+          echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
+          export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
+          notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
+          export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
+          OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+          export DOCKER_CONTENT_TRUST=1
+          VERSION=${CIRCLE_TAG:-latest}
+          docker buildx build --progress=plain --platform=linux/arm64 --cache-from=type=local,src=/tmp/latest-arm64-cache --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+          docker tag patoarvizu/vault-dynamic-configuration-operator:latest-arm64 patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
+          docker tag patoarvizu/vault-dynamic-configuration-operator:latest-arm64 patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+        no_output_timeout: 60m
+
+  build-arm7-image:
+    executor: vm-arm
+    steps:
+    - checkout
+    - run:
+        name: Build arm7 image
+        command: |
+          docker buildx create --name cci-builder --use
+          OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+          docker buildx build --progress=plain --platform=linux/arm/v7 --cache-to=type=local,dest=/tmp/latest-arm7-cache,mode=max $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7
+    - persist_to_workspace:
+        root: /tmp/
+        paths:
+        - latest-arm7-cache
+
+  push-arm7-image:
+    executor: vm
+    steps:
+    - checkout
+    - attach_workspace:
+        at: /tmp/
+    - run:
+        name: Install notary
+        command: |
+          curl -L https://github.com/theupdateframework/notary/releases/download/v0.6.1/notary-Linux-amd64 -o notary
+          chmod +x notary
+          sudo mv notary /usr/local/bin
+    - run:
+        name: Log in to Docker Hub
+        command: |
+          docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+    - run:
+        name: Sign and push arm7 image
+        command: |
+          sudo apt-get update
+          sudo apt-get install qemu-user -y
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+          docker buildx create --name cci-builder --use
+          echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
+          export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
+          notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
+          export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
+          OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+          export DOCKER_CONTENT_TRUST=1
+          VERSION=${CIRCLE_TAG:-latest}
+          docker buildx build --progress=plain --platform=linux/arm/v7 --cache-from=type=local,src=/tmp/latest-arm7-cache --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7
+          docker tag patoarvizu/vault-dynamic-configuration-operator:latest-arm7 patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
+          docker tag patoarvizu/vault-dynamic-configuration-operator:latest-arm7 patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
+          docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm7
+          docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
+          docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
+        no_output_timeout: 60m
+
+  push-combined-image:
     executor: vm
     steps:
     - checkout
@@ -115,53 +246,64 @@ jobs:
           chmod +x notary
           sudo mv notary /usr/local/bin
     - run:
-        name: Push multi-arch images
+        name: Log in to Docker Hub
         command: |
-          sudo apt-get update
-          sudo apt-get install qemu-user -y
-          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
-          docker buildx create --name cci-builder --use
           docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+    - run:
+        name: Sign and push combined image
+        command: |
+          docker buildx create --name cci-builder --use
           echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
           export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
           notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
           export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
-          OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
           export DOCKER_CONTENT_TRUST=1
           VERSION=${CIRCLE_TAG:-latest}
-          docker buildx build --progress=plain --platform=linux/arm64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
-          docker buildx build --progress=plain --platform=linux/arm/v7 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
-          docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
-          docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
-          docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
-          docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm7
-          docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
-          docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
-          docker buildx build --progress=plain --platform=linux/amd64,linux/arm64,linux/arm/v7 --push $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION
-          DIGEST=$(docker buildx imagetools inspect patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 | grep Digest | cut -d':' -f3)
-          LENGTH=$(( $(docker buildx imagetools inspect patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 --raw | wc -c) - 1 ))
+          docker manifest create patoarvizu/vault-dynamic-configuration-operator:latest --amend patoarvizu/vault-dynamic-configuration-operator:latest-amd64 --amend patoarvizu/vault-dynamic-configuration-operator:latest-arm64 patoarvizu/vault-dynamic-configuration-operator:latest-arm7
+          docker manifest push patoarvizu/vault-dynamic-configuration-operator:latest
+          docker manifest create patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1 --amend patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-amd64 --amend patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64 patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7
+          docker manifest push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1
+          docker manifest create patoarvizu/vault-dynamic-configuration-operator:$VERSION --amend patoarvizu/vault-dynamic-configuration-operator:$VERSION-amd64 --amend patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64 patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
+          docker manifest push patoarvizu/vault-dynamic-configuration-operator:$VERSION
+          DIGEST=$(docker buildx imagetools inspect patoarvizu/vault-dynamic-configuration-operator:latest | grep Digest | cut -d':' -f3)
+          LENGTH=$(( $(docker buildx imagetools inspect patoarvizu/vault-dynamic-configuration-operator:latest --raw | wc -c) - 1 ))
           export NOTARY_AUTH=$(echo $DOCKER_HUB_USER:$DOCKER_HUB_ACCESS_TOKEN | base64)
           notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator latest $LENGTH --sha256 $DIGEST -r targets/releases
           notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator $CIRCLE_SHA1 $LENGTH --sha256 $DIGEST -r targets/releases
           notary -s https://notary.docker.io -d ~/.docker/trust addhash -p docker.io/patoarvizu/vault-dynamic-configuration-operator $VERSION $LENGTH --sha256 $DIGEST -r targets/releases
-        no_output_timeout: 30m
 
 workflows:
   version: 2
   build-operator:
     jobs:
-    - build:
+    - test:
         context: authentication-tokens
-        filters:
-          tags:
-            only: /^v\d+\.\d+.\d+$/
-    - push-multi-arch:
+    - build-and-push-amd64-image:
         requires:
-        - build
+        - test
+        context: authentication-tokens
+    - build-arm64-image:
+        requires:
+        - test
+    - push-arm64-image:
+        requires:
+        - build-arm64-image
+        context: authentication-tokens
+    - build-arm7-image:
+        requires:
+        - test
+    - push-arm7-image:
+        requires:
+        - build-arm7-image
+        context: authentication-tokens
+    - push-combined-image:
+        requires:
+        - build-and-push-amd64-image
+        - push-arm64-image
+        - push-arm7-image
         context: authentication-tokens
         filters:
           branches:
             ignore: /^.*$/
-            only: /^master$/
           tags:
             only: /^v\d+\.\d+.\d+$/
