@@ -127,8 +127,46 @@ jobs:
         command: |
           docker buildx create --name cci-builder --use
           OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+          docker buildx build --progress=plain --platform=linux/arm64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+          docker save -o /tmp/latest-arm64.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+        no_output_timeout: 60m
+    - persist_to_workspace:
+        root: /tmp/
+        paths:
+        - latest-arm64.tar
+
+  push-arm64-image:
+    executor: vm
+    steps:
+    - attach_workspace:
+        at: /tmp/
+    - run:
+        name: Install notary
+        command: |
+          curl -L https://github.com/theupdateframework/notary/releases/download/v0.6.1/notary-Linux-amd64 -o notary
+          chmod +x notary
+          sudo mv notary /usr/local/bin
+    - run:
+        name: Log in to Docker Hub
+        command: |
+          docker login --username $DOCKER_HUB_USER --password $DOCKER_HUB_ACCESS_TOKEN
+    - run:
+        name: Sign and push arm64 image
+        command: |
+          docker buildx create --name cci-builder --use
+          docker import /tmp/latest-arm64.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+          echo $ENCODED_NOTARY_ROLE_KEY | base64 -d > ${HOME}/vault-dynamic-configuration-operator-circleci.key
+          export NOTARY_DELEGATION_PASSPHRASE=$NOTARY_ROLE_PASSPHRASE
+          notary -s https://notary.docker.io -d ~/.docker/trust key import ${HOME}/vault-dynamic-configuration-operator-circleci.key --role vault-dynamic-configuration-operator-circleci
+          export DOCKER_CONTENT_TRUST_REPOSITORY_PASSPHRASE=$NOTARY_DELEGATION_PASSPHRASE
+          OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
+          export DOCKER_CONTENT_TRUST=1
           VERSION=${CIRCLE_TAG:-latest}
-          docker buildx build --progress=plain --platform=linux/arm64 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+          docker tag patoarvizu/vault-dynamic-configuration-operator:latest-arm64 patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
+          docker tag patoarvizu/vault-dynamic-configuration-operator:latest-arm64 patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:latest-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm64
+          docker push patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm64
         no_output_timeout: 60m
 
   build-arm7-image:
@@ -140,9 +178,13 @@ jobs:
         command: |
           docker buildx create --name cci-builder --use
           OPERATOR_BUILD_ARGS="--build-arg GIT_COMMIT=$CIRCLE_SHA1 --build-arg GIT_TAG=$CIRCLE_TAG --build-arg COMMIT_TIMESTAMP=$(git log -1 --format=%at) --build-arg AUTHOR_EMAIL=$(git log -1 --format=%ae) --build-arg SIGNATURE_KEY=$(git log -1 --format=%GK)"
-          VERSION=${CIRCLE_TAG:-latest}
-          docker buildx build --progress=plain --platform=linux/arm/v7 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$CIRCLE_SHA1-arm7 -t patoarvizu/vault-dynamic-configuration-operator:$VERSION-arm7
+          docker buildx build --progress=plain --platform=linux/arm/v7 --load $OPERATOR_BUILD_ARGS . -t patoarvizu/vault-dynamic-configuration-operator:latest-arm7
+          docker save -o /tmp/latest-arm7.tar patoarvizu/vault-dynamic-configuration-operator:latest-arm7
         no_output_timeout: 60m
+    - persist_to_workspace:
+        root: /tmp/
+        paths:
+        - latest-arm7.tar
 
   push-multi-arch:
     executor: vm
@@ -231,6 +273,10 @@ workflows:
     - build-arm64-image:
         requires:
         - build
+    - push-arm64-image:
+        requires:
+        - build-arm64-image
+        context: authentication-tokens
     - build-arm7-image:
         requires:
         - build
