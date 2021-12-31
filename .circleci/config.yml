@@ -342,17 +342,15 @@ workflows:
           tags:
             only: /^v\d+\.\d+.\d+$/
     - build-arm64-image:
-        requires:
-        - build
     - push-arm64-image:
         requires:
+        - build
         - build-arm64-image
         context: authentication-tokens
     - build-arm7-image:
-        requires:
-        - build
     - push-arm7-image:
         requires:
+        - build
         - build-arm7-image
         context: authentication-tokens
     - push-combined-image:
