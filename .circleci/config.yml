@@ -301,3 +301,8 @@ workflows:
         - push-arm64-image
         - push-arm7-image
         context: authentication-tokens
+        filters:
+          branches:
+            ignore: /^.*$/
+          tags:
+            only: /^v\d+\.\d+.\d+$/
