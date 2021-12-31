@@ -82,8 +82,11 @@ jobs:
           k3d cluster create --wait
           k3d image import patoarvizu/vault-dynamic-configuration-operator:latest
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/prometheus-operator/crds.yaml
+          sleep 10
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-operator.yaml
+          sleep 10
           kubectl apply -f https://raw.githubusercontent.com/patoarvizu/common-manifests/master/vault/vault-cluster-kubernetes-and-db.yaml
+          sleep 10
           kubectl apply -f test/manifests/namespaces/test.yaml
           helm install vault-dynamic-configuration-operator helm/vault-dynamic-configuration-operator/ -n vault
           sleep 60
