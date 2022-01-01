@@ -66,8 +66,9 @@ type BankVaultsConfig struct {
 }
 
 type Auth struct {
-	Roles []Role `json:"roles"`
-	Type  string `json:"type"`
+	Roles  []Role                 `json:"roles"`
+	Type   string                 `json:"type"`
+	Config map[string]interface{} `json:"config,omitempty"`
 }
 
 type Policy struct {
