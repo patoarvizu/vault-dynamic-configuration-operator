@@ -278,24 +278,42 @@ workflows:
     jobs:
     - test:
         context: authentication-tokens
+        filters:
+          tags:
+            only: /^v\d+\.\d+.\d+$/
     - build-and-push-amd64-image:
         requires:
         - test
         context: authentication-tokens
+        filters:
+          tags:
+            only: /^v\d+\.\d+.\d+$/
     - build-arm64-image:
         requires:
         - test
+        filters:
+          tags:
+            only: /^v\d+\.\d+.\d+$/
     - push-arm64-image:
         requires:
         - build-arm64-image
         context: authentication-tokens
+        filters:
+          tags:
+            only: /^v\d+\.\d+.\d+$/
     - build-arm7-image:
         requires:
         - test
+        filters:
+          tags:
+            only: /^v\d+\.\d+.\d+$/
     - push-arm7-image:
         requires:
         - build-arm7-image
         context: authentication-tokens
+        filters:
+          tags:
+            only: /^v\d+\.\d+.\d+$/
     - push-combined-image:
         requires:
         - build-and-push-amd64-image
