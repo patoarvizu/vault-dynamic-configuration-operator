@@ -138,6 +138,8 @@ var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
+	err = testKubernetesConfigStillExists()
+	Expect(err).ToNot(HaveOccurred())
 })
 
 func newTrue() *bool {
@@ -178,6 +180,27 @@ func namespaceIsInAllowedList(namespace string, allowedNamespaces interface{}) b
 		}
 	}
 	return false
+}
+
+func testKubernetesConfigStillExists() error {
+	vaultCR := &bankvaultsv1alpha1.Vault{}
+	bvConfig := controllers.BankVaultsConfig{}
+	err := wait.Poll(time.Second*2, time.Second*20, func() (done bool, err error) {
+		k8sClient.Get(context.TODO(), types.NamespacedName{Name: "vault", Namespace: "vault"}, vaultCR)
+		jsonData, wErr := json.Marshal(vaultCR.Spec.ExternalConfig)
+		if wErr != nil {
+			return false, nil
+		}
+		wErr = json.Unmarshal(jsonData, &bvConfig)
+		if wErr != nil {
+			return false, nil
+		}
+		if len(bvConfig.Auth[0].Config) == 0 || bvConfig.Auth[0].Config == nil {
+			return true, errors.New("Kubernetes config map got wiped")
+		}
+		return true, nil
+	})
+	return err
 }
 
 func testVaultRole(name string, namespaces []string) error {
