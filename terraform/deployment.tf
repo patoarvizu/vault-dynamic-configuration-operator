@@ -35,7 +35,7 @@ resource kubernetes_deployment_v1 deployment {
           args    = [
             "--enable-leader-election",
             "--annotation-prefix=${var.flag_annotation_prefix}",
-            "--target-vault-name=${var.flag_annotation_prefix}",
+            "--target-vault-name=${var.flag_target_vault_name}",
             "--auto-configure-annotation=${var.flag_auto_configure_annotation}",
             "--auto-configuredb-creds-annotation=${var.flag_auto_configure_db_creds_annotation}",
             "--token-ttl=${var.flag_token_ttl}",
