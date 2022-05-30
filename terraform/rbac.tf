@@ -49,7 +49,7 @@ resource kubernetes_cluster_role_binding_v1 cluster_role_binding {
 resource kubernetes_role_v1 role {
   metadata {
     name = "vault-dynamic-configuration-operator"
-    namespace = var.create_namespace ? kubernetes_namespace.ns[var.namespace_name].metadata[0].name : data.kubernetes_namespace.ns[var.namespace_name].metadata[0].name
+    namespace = var.create_namespace ? kubernetes_namespace_v1.ns[var.namespace_name].metadata[0].name : data.kubernetes_namespace.ns[var.namespace_name].metadata[0].name
   }
 
   rule {
@@ -74,7 +74,7 @@ resource kubernetes_role_v1 role {
 resource kubernetes_role_binding_v1 rolebinding {
   metadata {
     name = "vault-dynamic-configuration-operator"
-    namespace = var.create_namespace ? kubernetes_namespace.ns[var.namespace_name].metadata[0].name : data.kubernetes_namespace.ns[var.namespace_name].metadata[0].name
+    namespace = var.create_namespace ? kubernetes_namespace_v1.ns[var.namespace_name].metadata[0].name : data.kubernetes_namespace.ns[var.namespace_name].metadata[0].name
   }
 
   subject {
