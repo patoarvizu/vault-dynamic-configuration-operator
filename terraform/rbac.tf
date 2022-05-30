@@ -22,7 +22,7 @@ resource kubernetes_cluster_role_v1 cluster_role {
   }
 
   rule {
-    verbs      = ["create", "delete", "get", "list", "patch", "update", "watch"]
+    verbs      = ["create", "get", "list", "patch", "update", "watch"]
     api_groups = ["vault.banzaicloud.com"]
     resources  = ["vaults"]
   }
