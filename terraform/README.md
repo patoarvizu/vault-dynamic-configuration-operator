@@ -52,6 +52,7 @@ No modules.
 | <a name="input_namespace_name"></a> [namespace\_name](#input\_namespace\_name) | The name of the namespace to create or look up. | `string` | `"vault"` | no |
 | <a name="input_policy_template"></a> [policy\_template](#input\_policy\_template) | The default value of the `policy-template` setting | `string` | `"path \"secret/{{ .Name }}\" {\n  capabilities = [\"read\"]\n}\n"` | no |
 | <a name="input_service_account_name"></a> [service\_account\_name](#input\_service\_account\_name) | The name of the service account to create. | `string` | `"vault-dynamic-configuration-operator"` | no |
+| <a name="input_service_monitor_custom_labels"></a> [service\_monitor\_custom\_labels](#input\_service\_monitor\_custom\_labels) | Custom labels to add to the `ServiceMonitor` object. | `map` | `{}` | no |
 | <a name="input_watch_namespace"></a> [watch\_namespace](#input\_watch\_namespace) | The value to be set on the `WATCH_NAMESPACE` environment variable. | `string` | `""` | no |
 
 ## Outputs

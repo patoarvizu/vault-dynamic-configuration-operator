@@ -36,5 +36,8 @@ defaultConfiguration:
 prometheusMonitoring:
   # prometheusMonitoring.enable -- Create the `Service` and `ServiceMonitor` objects to enable Prometheus monitoring on the operator.
   enable: true
+  serviceMonitor:
+    # prometheusMonitoring.serviceMonitor.customLabels -- Custom labels to add to the ServiceMonitor object.
+    customLabels:
 # resources -- (object) The resources requests/limits to be set on the deployment pod spec template.
 resources:

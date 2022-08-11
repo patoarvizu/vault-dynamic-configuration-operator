@@ -2,7 +2,15 @@ apiVersion: v1
 entries:
   vault-dynamic-configuration-operator:
   - apiVersion: v2
-    created: "2020-10-08T18:11:51.271666-04:00"
+    created: "2022-08-10T23:19:43.979237-04:00"
+    description: Vault dynamic configuration operator
+    digest: 8eecef8aeeb1ed53296826c2a16fb883fd132fa974e5503842a2d9a71d0ac101
+    name: vault-dynamic-configuration-operator
+    urls:
+    - https://patoarvizu.github.io/vault-dynamic-configuration-operator/vault-dynamic-configuration-operator-0.1.2.tgz
+    version: 0.1.2
+  - apiVersion: v2
+    created: "2022-08-10T23:19:43.978844-04:00"
     description: Vault dynamic configuration operator
     digest: e5c7d3f7004e7048e79a492e774ec014c55451c1463d4cfb61ad486ea60af1f6
     name: vault-dynamic-configuration-operator
@@ -10,7 +18,7 @@ entries:
     - https://patoarvizu.github.io/vault-dynamic-configuration-operator/vault-dynamic-configuration-operator-0.1.1.tgz
     version: 0.1.1
   - apiVersion: v2
-    created: "2020-10-08T18:11:51.27111-04:00"
+    created: "2022-08-10T23:19:43.978063-04:00"
     description: Vault dynamic configuration operator
     digest: bcc9af8d6c1f2c5ff5ae7adf8d0331a4a566ad73f0acecec95e849f86035deb9
     name: vault-dynamic-configuration-operator
@@ -18,11 +26,11 @@ entries:
     - https://patoarvizu.github.io/vault-dynamic-configuration-operator/vault-dynamic-configuration-operator-0.1.0.tgz
     version: 0.1.0
   - apiVersion: v1
-    created: "2020-10-08T18:11:51.269974-04:00"
+    created: "2022-08-10T23:19:43.977298-04:00"
     description: Vault dynamic configuration operator
     digest: 4075b880affe243dcf0e16d5b588489008a3ea1c55c4ec98a25a36ff96a2a6a9
     name: vault-dynamic-configuration-operator
     urls:
     - https://patoarvizu.github.io/vault-dynamic-configuration-operator/vault-dynamic-configuration-operator-0.0.0.tgz
     version: 0.0.0
-generated: "2020-10-08T18:11:51.26876-04:00"
+generated: "2022-08-10T23:19:43.975081-04:00"
