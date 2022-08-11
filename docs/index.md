@@ -1,6 +1,6 @@
 # vault-dynamic-configuration-operator
 
-![Version: 0.1.1](https://img.shields.io/badge/Version-0.1.1-informational?style=flat-square)
+![Version: 0.1.2](https://img.shields.io/badge/Version-0.1.2-informational?style=flat-square)
 
 Vault dynamic configuration operator
 
@@ -19,6 +19,7 @@ Vault dynamic configuration operator
 | imagePullPolicy | string | `"IfNotPresent"` | The imagePullPolicy to be used on the operator. |
 | imageVersion | string | `"latest"` | The image version used for the operator. |
 | prometheusMonitoring.enable | bool | `true` | Create the `Service` and `ServiceMonitor` objects to enable Prometheus monitoring on the operator. |
+| prometheusMonitoring.serviceMonitor.customLabels | string | `nil` | Custom labels to add to the ServiceMonitor object. |
 | resources | object | `nil` | The resources requests/limits to be set on the deployment pod spec template. |
 | serviceAccount.name | string | `"vault-dynamic-configuration-operator"` | The name of the `ServiceAccount` to be created. |
 | watchNamespace | string | `""` | The value to be set on the `WATCH_NAMESPACE` environment variable. |

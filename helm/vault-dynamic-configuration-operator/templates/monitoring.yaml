@@ -22,6 +22,9 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: vault-dynamic-configuration-operator
+  {{- if .Values.prometheusMonitoring.serviceMonitor.customLabels }}
+  labels: {{ toYaml .Values.prometheusMonitoring.serviceMonitor.customLabels | nindent 4 }}
+  {{- end }}
 spec:
   endpoints:
   - path: /metrics
